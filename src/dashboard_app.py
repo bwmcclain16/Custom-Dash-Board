@@ -72,6 +72,14 @@ DEFAULT_DISPLAY = {
     "backgroundImage": "",
     "showLabel": True,
     "showValue": True,
+    "layout": {
+        "labelX": 16,
+        "labelY": 16,
+        "valueX": 16,
+        "valueY": 52,
+        "labelAlign": "left",
+        "valueAlign": "left",
+    },
 }
 
 DEFAULT_ALERT = {
@@ -81,6 +89,7 @@ DEFAULT_ALERT = {
     "threshold": 90,
     "color": "#ef4444",
     "message": "WARNING",
+    "effect": "widget_only",
 }
 
 DEFAULT_WIDGET = {
@@ -335,8 +344,18 @@ def normalize_alerts(alerts: list[dict[str, Any]], widget_id: str) -> list[dict[
         normalized_alert = deep_merge(DEFAULT_ALERT, alert)
         normalized_alert["id"] = str(normalized_alert.get("id") or f"{widget_id}-alert-{index}")
         normalized_alert["operator"] = normalize_operator(normalized_alert.get("operator", DEFAULT_ALERT["operator"]))
+        normalized_alert["effect"] = normalize_alert_effect(normalized_alert.get("effect", DEFAULT_ALERT["effect"]))
         normalized_alerts.append(normalized_alert)
     return normalized_alerts or [deepcopy(DEFAULT_ALERT)]
+
+
+ALERT_EFFECT_ALIASES = {
+    "widget_only": "widget_only",
+    "screen_flash": "screen_flash",
+    "screen_solid": "screen_solid",
+    "flash": "screen_flash",
+    "solid": "screen_solid",
+}
 
 
 OPERATOR_ALIASES = {
@@ -357,6 +376,10 @@ OPERATOR_ALIASES = {
 
 def normalize_operator(value: str) -> str:
     return OPERATOR_ALIASES.get(str(value), "greater_or_equal")
+
+
+def normalize_alert_effect(value: str) -> str:
+    return ALERT_EFFECT_ALIASES.get(str(value), "widget_only")
 
 
 def parse_can_id(value: str | int) -> int:
@@ -400,6 +423,7 @@ def evaluate_alerts(value: float, alerts: list[dict[str, Any]]) -> dict[str, Any
         if operations[operator](value, threshold):
             alert_copy = deepcopy(alert)
             alert_copy["operator"] = operator
+            alert_copy["effect"] = normalize_alert_effect(alert.get("effect", DEFAULT_ALERT["effect"]))
             return alert_copy
     return None
 

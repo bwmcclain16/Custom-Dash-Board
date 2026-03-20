@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <div id="screen-alert-overlay" class="screen-alert-overlay hidden">
+    <div id="screen-alert-message" class="screen-alert-message"></div>
+  </div>
+
   <div class="shell">
     <aside class="sidebar left-panel">
       <h1>Motorsport Dashboard</h1>
@@ -43,15 +47,17 @@
       <div class="toolbar">
         <div>
           <strong id="dashboard-name">Dashboard</strong>
-          <span class="muted">Drag widgets around. Pull the corner handle to resize.</span>
+          <span class="muted">Drag widgets around, resize them, and drag text/value items inside the widget itself.</span>
         </div>
         <div class="toolbar-actions">
-          <button id="fullscreen-toggle" class="secondary">Fullscreen</button>
+          <button id="dashboard-fullscreen-toggle" class="secondary">Dashboard fullscreen</button>
           <label class="inline-toggle"><input type="checkbox" id="toggle-grid" checked> Show grid</label>
           <label>Refresh <input id="refresh-rate" type="number" min="50" step="50" value="250"> ms</label>
         </div>
       </div>
-      <div id="canvas" class="canvas"></div>
+      <div class="canvas-shell">
+        <div id="canvas" class="canvas"></div>
+      </div>
     </main>
 
     <aside class="sidebar right-panel">
@@ -127,6 +133,31 @@
           <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
           <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
 
+          <h3>Text & Value Position</h3>
+          <div class="two-col">
+            <label>Label X <input name="display.layout.labelX" type="number"></label>
+            <label>Label Y <input name="display.layout.labelY" type="number"></label>
+            <label>Value X <input name="display.layout.valueX" type="number"></label>
+            <label>Value Y <input name="display.layout.valueY" type="number"></label>
+          </div>
+          <div class="two-col">
+            <label>Label align
+              <select name="display.layout.labelAlign">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <label>Value align
+              <select name="display.layout.valueAlign">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+          </div>
+          <p class="tiny">Tip: select a widget, then drag the label or value directly inside the widget preview to reposition them.</p>
+
           <h3>Alert</h3>
           <label>Alert name <input name="alerts.0.name"></label>
           <label>Raise alert when value is
@@ -144,6 +175,13 @@
             <label>Alert color <input name="alerts.0.color" type="color"></label>
           </div>
           <label>Alert text <input name="alerts.0.message"></label>
+          <label>Alert effect
+            <select name="alerts.0.effect">
+              <option value="widget_only">Highlight only this widget</option>
+              <option value="screen_flash">Flash the entire screen</option>
+              <option value="screen_solid">Hold the entire screen solid</option>
+            </select>
+          </label>
         </form>
       </section>
     </aside>
@@ -151,12 +189,18 @@
 
   <template id="widget-template">
     <article class="dashboard-widget">
-      <div class="widget-header">
-        <span class="widget-title"></span>
-        <span class="widget-value"></span>
-      </div>
-      <div class="widget-body">
-        <div class="widget-meter"><div class="widget-meter-fill"></div></div>
+      <div class="widget-content">
+        <span class="widget-title movable-part" data-part="label"></span>
+        <span class="widget-value movable-part" data-part="value"></span>
+        <div class="widget-visual">
+          <div class="widget-meter"><div class="widget-meter-fill"></div></div>
+          <div class="widget-gauge hidden">
+            <div class="widget-gauge-ring"></div>
+            <div class="widget-gauge-inner"></div>
+            <div class="widget-gauge-needle"></div>
+          </div>
+          <div class="widget-status-dot hidden"></div>
+        </div>
         <div class="widget-alert hidden"></div>
       </div>
       <div class="resize-handle"></div>

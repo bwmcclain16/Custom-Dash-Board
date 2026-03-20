@@ -33,9 +33,11 @@ const els = {
   widgetForm: document.getElementById('widget-form'),
   emptyState: document.getElementById('empty-state'),
   widgetTemplate: document.getElementById('widget-template'),
-  fullscreenToggle: document.getElementById('fullscreen-toggle'),
+  dashboardFullscreenToggle: document.getElementById('dashboard-fullscreen-toggle'),
   dashboardSaveStatus: document.getElementById('dashboard-save-status'),
   widgetSaveStatus: document.getElementById('widget-save-status'),
+  screenAlertOverlay: document.getElementById('screen-alert-overlay'),
+  screenAlertMessage: document.getElementById('screen-alert-message'),
 };
 
 async function request(url, options = {}) {
@@ -61,6 +63,10 @@ function ensureHexColor(value, fallback = '#0f172a') {
   const rgba = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
   if (!rgba) return fallback;
   return '#' + rgba.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, '0')).join('');
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function updateStatusText() {
@@ -105,6 +111,31 @@ function renderWidgetList() {
   });
 }
 
+function getWidgetLayout(widget) {
+  const layout = widget.display.layout || {};
+  return {
+    labelX: Number(layout.labelX ?? 16),
+    labelY: Number(layout.labelY ?? 16),
+    valueX: Number(layout.valueX ?? 16),
+    valueY: Number(layout.valueY ?? 52),
+    labelAlign: layout.labelAlign || 'left',
+    valueAlign: layout.valueAlign || 'left',
+  };
+}
+
+function applyMovableLayout(element, x, y, align) {
+  element.style.left = `${x}px`;
+  element.style.top = `${y}px`;
+  element.style.textAlign = align;
+  element.style.transform = align === 'center' ? 'translateX(-50%)' : align === 'right' ? 'translateX(-100%)' : 'none';
+}
+
+function alignAnchor(align) {
+  if (align === 'center') return 0.5;
+  if (align === 'right') return 1;
+  return 0;
+}
+
 function buildWidgetElement(widget, runtimeInfo) {
   const node = els.widgetTemplate.content.firstElementChild.cloneNode(true);
   node.dataset.widgetId = widget.id;
@@ -122,26 +153,58 @@ function buildWidgetElement(widget, runtimeInfo) {
 
   const title = node.querySelector('.widget-title');
   const value = node.querySelector('.widget-value');
+  const meter = node.querySelector('.widget-meter');
   const meterFill = node.querySelector('.widget-meter-fill');
+  const gauge = node.querySelector('.widget-gauge');
+  const gaugeRing = node.querySelector('.widget-gauge-ring');
+  const gaugeNeedle = node.querySelector('.widget-gauge-needle');
+  const statusDot = node.querySelector('.widget-status-dot');
   const alertNode = node.querySelector('.widget-alert');
+
+  const layout = getWidgetLayout(widget);
   title.textContent = widget.display.showLabel ? (widget.display.label || widget.name) : '';
   value.textContent = widget.display.showValue ? (runtimeInfo?.formatted || '—') : '';
-  meterFill.style.color = widget.display.accentColor;
+  title.classList.toggle('hidden', !widget.display.showLabel);
+  value.classList.toggle('hidden', !widget.display.showValue);
+  applyMovableLayout(title, layout.labelX, layout.labelY, layout.labelAlign);
+  applyMovableLayout(value, layout.valueX, layout.valueY, layout.valueAlign);
 
   const min = Number(widget.display.min ?? 0);
   const max = Number(widget.display.max ?? 100);
   const current = Number(runtimeInfo?.value ?? 0);
-  const ratio = Math.max(0, Math.min(100, ((current - min) / Math.max(1, max - min)) * 100));
+  const ratio = clamp(((current - min) / Math.max(1, max - min)) * 100, 0, 100);
+  const accent = widget.display.accentColor;
+  meterFill.style.color = accent;
+  statusDot.style.color = accent;
+  gaugeRing.style.color = accent;
+  gaugeNeedle.style.color = accent;
   meterFill.style.width = `${ratio}%`;
+  gaugeRing.style.background = `conic-gradient(${accent} 0deg ${ratio * 3.6}deg, rgba(255,255,255,0.08) ${ratio * 3.6}deg 360deg)`;
+  gaugeNeedle.style.transform = `rotate(${(-120 + ratio * 2.4).toFixed(1)}deg)`;
+  statusDot.style.opacity = `${0.35 + ratio / 150}`;
+
+  meter.classList.toggle('hidden', widget.kind === 'gauge' || widget.kind === 'status');
+  gauge.classList.toggle('hidden', widget.kind !== 'gauge');
+  statusDot.classList.toggle('hidden', widget.kind !== 'status');
+  if (widget.kind === 'bar') meter.style.height = '22px';
+  else meter.style.height = '14px';
 
   if (runtimeInfo?.alert) {
     alertNode.textContent = runtimeInfo.alert.message || runtimeInfo.alert.name || 'Alert';
     alertNode.style.background = runtimeInfo.alert.color || '#ef4444';
     alertNode.classList.remove('hidden');
+    if (runtimeInfo.alert.effect === 'widget_only') {
+      node.style.boxShadow = `0 0 0 3px ${runtimeInfo.alert.color || '#ef4444'}, 0 0 30px ${runtimeInfo.alert.color || '#ef4444'}`;
+    }
+  } else {
+    node.style.boxShadow = 'none';
   }
 
-  node.addEventListener('pointerdown', (event) => beginDrag(event, widget.id, false));
-  node.querySelector('.resize-handle').addEventListener('pointerdown', (event) => beginDrag(event, widget.id, true));
+  node.addEventListener('pointerdown', (event) => beginWidgetDrag(event, widget.id, 'move'));
+  node.querySelector('.resize-handle').addEventListener('pointerdown', (event) => beginWidgetDrag(event, widget.id, 'resize'));
+  node.querySelectorAll('.movable-part').forEach((partNode) => {
+    partNode.addEventListener('pointerdown', (event) => beginPartDrag(event, widget.id, partNode.dataset.part));
+  });
   node.addEventListener('click', () => selectWidget(widget.id));
   return node;
 }
@@ -159,6 +222,7 @@ function renderCanvas() {
   [...state.config.widgets].sort((a, b) => (a.z || 1) - (b.z || 1)).forEach((widget) => {
     els.canvas.appendChild(buildWidgetElement(widget, runtimeMap.get(widget.id)));
   });
+  applyScreenAlertOverlay();
 }
 
 function selectWidget(widgetId) {
@@ -239,8 +303,9 @@ function createDefaultWidget() {
       label: `Widget ${nextIndex}`, decimalPlaces: 0, prefix: '', suffix: '', min: 0, max: 100,
       backgroundColor: '#132033', textColor: '#f8fafc', accentColor: '#38bdf8', borderColor: '#38bdf8',
       borderWidth: 2, borderRadius: 20, backgroundImage: '', showLabel: true, showValue: true,
+      layout: { labelX: 16, labelY: 16, valueX: 16, valueY: 52, labelAlign: 'left', valueAlign: 'left' },
     },
-    alerts: [{ id: `alert-${Date.now()}`, name: 'Warning', operator: 'greater_or_equal', threshold: 90, color: '#ef4444', message: 'WARNING' }],
+    alerts: [{ id: `alert-${Date.now()}`, name: 'Warning', operator: 'greater_or_equal', threshold: 90, color: '#ef4444', message: 'WARNING', effect: 'widget_only' }],
   };
 }
 
@@ -278,18 +343,36 @@ function deleteWidget() {
   populateWidgetForm();
 }
 
-function beginDrag(event, widgetId, resizing) {
-  if (event.target.closest('input, select, button')) return;
+function beginWidgetDrag(event, widgetId, mode) {
+  if (event.target.closest('input, select, button') || event.target.closest('.movable-part')) return;
   event.preventDefault();
   event.stopPropagation();
   selectWidget(widgetId);
   const widget = selectedWidget();
   state.dragging = {
+    type: mode,
     widgetId,
-    resizing,
     startX: event.clientX,
     startY: event.clientY,
     origin: { x: widget.x, y: widget.y, w: widget.w, h: widget.h },
+  };
+}
+
+function beginPartDrag(event, widgetId, part) {
+  event.preventDefault();
+  event.stopPropagation();
+  selectWidget(widgetId);
+  const widget = selectedWidget();
+  const layout = getWidgetLayout(widget);
+  const keyX = part === 'label' ? 'labelX' : 'valueX';
+  const keyY = part === 'label' ? 'labelY' : 'valueY';
+  state.dragging = {
+    type: 'part',
+    widgetId,
+    part,
+    startX: event.clientX,
+    startY: event.clientY,
+    origin: { x: Number(layout[keyX]), y: Number(layout[keyY]) },
   };
 }
 
@@ -301,13 +384,25 @@ window.addEventListener('pointermove', (event) => {
   const dy = event.clientY - state.dragging.startY;
   const grid = Number(state.config.dashboard.gridSize || 1);
   const snap = (value) => Math.round(value / grid) * grid;
-  if (state.dragging.resizing) {
+
+  if (state.dragging.type === 'resize') {
     widget.w = Math.max(140, snap(state.dragging.origin.w + dx));
     widget.h = Math.max(110, snap(state.dragging.origin.h + dy));
-  } else {
+  } else if (state.dragging.type === 'move') {
     widget.x = Math.max(0, snap(state.dragging.origin.x + dx));
     widget.y = Math.max(0, snap(state.dragging.origin.y + dy));
+  } else if (state.dragging.type === 'part') {
+    const layout = widget.display.layout ||= {};
+    const partPrefix = state.dragging.part === 'label' ? 'label' : 'value';
+    const align = layout[`${partPrefix}Align`] || 'left';
+    const anchor = alignAnchor(align);
+    const maxX = widget.w - 16;
+    const newX = clamp(snap(state.dragging.origin.x + dx), 12 + (anchor * 60), maxX);
+    const newY = clamp(snap(state.dragging.origin.y + dy), 8, widget.h - 36);
+    layout[`${partPrefix}X`] = newX;
+    layout[`${partPrefix}Y`] = newY;
   }
+
   markDirty('widget', true);
   markDirty('dashboard', true);
   renderCanvas();
@@ -337,9 +432,26 @@ async function saveSelectedWidget() {
   await persistConfig(`Saved widget: ${selectedWidget().name}`);
 }
 
+function applyScreenAlertOverlay() {
+  const activeAlert = (state.runtime?.widgets || [])
+    .map((entry) => entry.alert)
+    .find((alert) => alert && alert.effect && alert.effect !== 'widget_only');
+
+  if (!activeAlert) {
+    els.screenAlertOverlay.className = 'screen-alert-overlay hidden';
+    els.screenAlertOverlay.style.background = 'transparent';
+    els.screenAlertMessage.textContent = '';
+    return;
+  }
+
+  els.screenAlertOverlay.className = `screen-alert-overlay ${activeAlert.effect === 'screen_flash' ? 'flash' : ''}`.trim();
+  els.screenAlertOverlay.style.background = activeAlert.color || '#ef4444';
+  els.screenAlertMessage.textContent = activeAlert.message || activeAlert.name || 'ALERT';
+}
+
 async function refreshRuntime() {
   state.runtime = await request('/api/runtime');
-  if (!state.runtime.error || !String(els.runtimeStatus.textContent).includes('saved')) {
+  if (!state.runtime.error || !String(els.runtimeStatus.textContent).includes('Saved')) {
     els.runtimeStatus.textContent = state.runtime.error ? `${state.runtime.status} · ${state.runtime.error}` : state.runtime.status;
   }
   renderCanvas();
@@ -353,7 +465,7 @@ function wireForm() {
     const currentValue = getPath(widget, field.name);
     const value = coerceFieldValue(field, currentValue);
     setPath(widget, field.name, value);
-    if (field.name === 'name') widget.display.label ||= value;
+    if (field.name === 'name' && !widget.display.label) widget.display.label = value;
     markDirty('widget', true);
     renderWidgetList();
     renderCanvas();
@@ -412,18 +524,18 @@ async function importConfigFromFile(file) {
   await refreshRuntime();
 }
 
-async function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    await document.documentElement.requestFullscreen();
-    els.fullscreenToggle.textContent = 'Exit fullscreen';
-  } else {
+async function toggleDashboardFullscreen() {
+  if (document.fullscreenElement === els.canvas) {
     await document.exitFullscreen();
-    els.fullscreenToggle.textContent = 'Fullscreen';
+    return;
   }
+  await els.canvas.requestFullscreen();
 }
 
 document.addEventListener('fullscreenchange', () => {
-  els.fullscreenToggle.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+  els.dashboardFullscreenToggle.textContent = document.fullscreenElement === els.canvas
+    ? 'Exit dashboard fullscreen'
+    : 'Dashboard fullscreen';
 });
 
 async function init() {
@@ -456,7 +568,7 @@ els.duplicateWidget.addEventListener('click', duplicateWidget);
 els.deleteWidget.addEventListener('click', deleteWidget);
 els.injectFrame.addEventListener('click', injectFrame);
 els.refreshRate.addEventListener('change', scheduleRefresh);
-els.fullscreenToggle.addEventListener('click', toggleFullscreen);
+els.dashboardFullscreenToggle.addEventListener('click', toggleDashboardFullscreen);
 
 init().catch((error) => {
   console.error(error);
