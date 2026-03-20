@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Motorsport Dashboard Builder</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar left-panel">
+      <h1>Motorsport Dashboard</h1>
+      <p class="muted">No-code dashboard builder for CAN-driven motorsport displays.</p>
+      <div class="stack">
+        <button id="add-widget">+ Add widget</button>
+        <button id="save-config" class="secondary">Save dashboard</button>
+        <button id="duplicate-widget" class="secondary">Duplicate widget</button>
+        <button id="delete-widget" class="danger">Delete selected</button>
+      </div>
+
+      <section class="panel-section">
+        <h2>Runtime</h2>
+        <div id="runtime-status" class="badge">Loading…</div>
+        <p class="tiny">Use virtual CAN mode for testing on any Raspberry Pi 5 or LattePanda IOTA. Switch the CAN interface in the settings panel for live hardware.</p>
+      </section>
+
+      <section class="panel-section">
+        <h2>Widgets</h2>
+        <div id="widget-list" class="widget-list"></div>
+      </section>
+
+      <section class="panel-section">
+        <h2>CAN Simulator</h2>
+        <label>CAN ID <input id="sim-can-id" value="0x100"></label>
+        <label>Bytes (comma separated) <input id="sim-data" value="64,31,0,0,0,0,0,0"></label>
+        <button id="inject-frame" class="secondary">Inject frame</button>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <div class="toolbar">
+        <div>
+          <strong id="dashboard-name">Dashboard</strong>
+          <span class="muted">Drag widgets around. Pull the corner handle to resize.</span>
+        </div>
+        <div class="toolbar-actions">
+          <label class="inline-toggle"><input type="checkbox" id="toggle-grid" checked> Show grid</label>
+          <label>Refresh <input id="refresh-rate" type="number" min="50" step="50" value="250"> ms</label>
+        </div>
+      </div>
+      <div id="canvas" class="canvas"></div>
+    </main>
+
+    <aside class="sidebar right-panel">
+      <section class="panel-section">
+        <h2>Dashboard</h2>
+        <label>Name <input id="dashboard-title"></label>
+        <label>Width <input id="dashboard-width" type="number"></label>
+        <label>Height <input id="dashboard-height" type="number"></label>
+        <label>Background color <input id="dashboard-bg" type="color"></label>
+        <label>Background image URL <input id="dashboard-bg-image" placeholder="file:///... or https://..."></label>
+        <label>Grid size <input id="dashboard-grid" type="number" min="8" step="4"></label>
+      </section>
+
+      <section class="panel-section">
+        <h2>Widget Editor</h2>
+        <div id="empty-state" class="empty-state">Select a widget to customize every detail.</div>
+        <form id="widget-form" class="widget-form hidden">
+          <label>Name <input name="name"></label>
+          <label>Kind
+            <select name="kind">
+              <option value="value">Value</option>
+              <option value="gauge">Gauge</option>
+              <option value="bar">Bar</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>X <input name="x" type="number"></label>
+            <label>Y <input name="y" type="number"></label>
+            <label>Width <input name="w" type="number"></label>
+            <label>Height <input name="h" type="number"></label>
+          </div>
+
+          <h3>CAN Data</h3>
+          <label>CAN ID <input name="source.canId"></label>
+          <div class="two-col">
+            <label>Start byte <input name="source.startByte" type="number"></label>
+            <label>Byte length <input name="source.byteLength" type="number"></label>
+            <label>Scale <input name="source.scale" type="number" step="0.01"></label>
+            <label>Offset <input name="source.offset" type="number" step="0.01"></label>
+            <label>Fallback <input name="source.fallback" type="number" step="0.01"></label>
+            <label>Units <input name="source.units"></label>
+          </div>
+          <label>Endian
+            <select name="source.endian">
+              <option value="little">Little endian</option>
+              <option value="big">Big endian</option>
+            </select>
+          </label>
+          <label class="inline-toggle"><input name="source.signed" type="checkbox"> Signed signal</label>
+
+          <h3>Display</h3>
+          <label>Label <input name="display.label"></label>
+          <div class="two-col">
+            <label>Decimals <input name="display.decimalPlaces" type="number"></label>
+            <label>Min <input name="display.min" type="number" step="0.1"></label>
+            <label>Max <input name="display.max" type="number" step="0.1"></label>
+            <label>Border width <input name="display.borderWidth" type="number"></label>
+            <label>Radius <input name="display.borderRadius" type="number"></label>
+          </div>
+          <label>Prefix <input name="display.prefix"></label>
+          <label>Suffix <input name="display.suffix"></label>
+          <label>Background color <input name="display.backgroundColor" type="color"></label>
+          <label>Text color <input name="display.textColor" type="color"></label>
+          <label>Accent color <input name="display.accentColor" type="color"></label>
+          <label>Border color <input name="display.borderColor" type="color"></label>
+          <label>Background image URL <input name="display.backgroundImage"></label>
+          <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
+          <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
+
+          <h3>Alert</h3>
+          <label>Alert name <input name="alerts.0.name"></label>
+          <label>Operator
+            <select name="alerts.0.operator">
+              <option value=">=">&gt;=</option>
+              <option value=">">&gt;</option>
+              <option value="<=">&lt;=</option>
+              <option value="<">&lt;</option>
+              <option value="==">==</option>
+              <option value="!=">!=</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>Threshold <input name="alerts.0.threshold" type="number" step="0.1"></label>
+            <label>Alert color <input name="alerts.0.color" type="color"></label>
+          </div>
+          <label>Alert text <input name="alerts.0.message"></label>
+        </form>
+      </section>
+    </aside>
+  </div>
+
+  <template id="widget-template">
+    <article class="dashboard-widget">
+      <div class="widget-header">
+        <span class="widget-title"></span>
+        <span class="widget-value"></span>
+      </div>
+      <div class="widget-body">
+        <div class="widget-meter"><div class="widget-meter-fill"></div></div>
+        <div class="widget-alert hidden"></div>
+      </div>
+      <div class="resize-handle"></div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
