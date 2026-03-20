@@ -45,6 +45,7 @@ class DashboardAppTests(unittest.TestCase):
         self.assertEqual(evaluate_alerts(95, alerts)["name"], "Warm")
         self.assertEqual(normalize_operator(">="), "greater_or_equal")
         self.assertEqual(normalize_alert_effect("flash"), "screen_flash")
+        self.assertEqual(normalize_alert_effect("background_flash"), "background_flash")
         self.assertIsNone(evaluate_alerts(70, alerts))
 
     def test_normalize_config_fills_missing_defaults(self):
@@ -52,6 +53,7 @@ class DashboardAppTests(unittest.TestCase):
         widget = config["widgets"][0]
         self.assertEqual(widget["display"]["borderWidth"], 2)
         self.assertEqual(widget["display"]["layout"]["labelX"], 16)
+        self.assertEqual(widget["display"]["gauge"]["tickCount"], 11)
         self.assertEqual(widget["alerts"][0]["operator"], "greater_or_equal")
         self.assertEqual(widget["alerts"][0]["effect"], "screen_solid")
         self.assertEqual(config["dashboard"]["width"], 1280)

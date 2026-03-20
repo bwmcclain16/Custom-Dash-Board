@@ -47,7 +47,7 @@
       <div class="toolbar">
         <div>
           <strong id="dashboard-name">Dashboard</strong>
-          <span class="muted">Drag widgets around, resize them, and drag text/value items inside the widget itself.</span>
+          <span class="muted">Drag widgets around, resize them, and drag text/value items inside the widget itself. Widgets lock automatically in dashboard fullscreen.</span>
         </div>
         <div class="toolbar-actions">
           <button id="dashboard-fullscreen-toggle" class="secondary">Dashboard fullscreen</button>
@@ -133,6 +133,18 @@
           <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
           <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
 
+          <h3>Gauge</h3>
+          <label class="inline-toggle"><input name="display.gauge.useGradient" type="checkbox"> Use value-based gauge gradient</label>
+          <div class="two-col">
+            <label>Gradient start <input name="display.gauge.gradientStartColor" type="color"></label>
+            <label>Gradient mid <input name="display.gauge.gradientMidColor" type="color"></label>
+            <label>Gradient end <input name="display.gauge.gradientEndColor" type="color"></label>
+            <label>Tick count <input name="display.gauge.tickCount" type="number" min="3"></label>
+            <label>Major tick every <input name="display.gauge.majorTickEvery" type="number" min="1"></label>
+            <label>Start angle <input name="display.gauge.startAngle" type="number"></label>
+            <label>End angle <input name="display.gauge.endAngle" type="number"></label>
+          </div>
+
           <h3>Text & Value Position</h3>
           <div class="two-col">
             <label>Label X <input name="display.layout.labelX" type="number"></label>
@@ -178,6 +190,7 @@
           <label>Alert effect
             <select name="alerts.0.effect">
               <option value="widget_only">Highlight only this widget</option>
+              <option value="background_flash">Flash the dashboard background</option>
               <option value="screen_flash">Flash the entire screen</option>
               <option value="screen_solid">Hold the entire screen solid</option>
             </select>
@@ -195,6 +208,7 @@
         <div class="widget-visual">
           <div class="widget-meter"><div class="widget-meter-fill"></div></div>
           <div class="widget-gauge hidden">
+            <div class="widget-gauge-marks"></div>
             <div class="widget-gauge-ring"></div>
             <div class="widget-gauge-inner"></div>
             <div class="widget-gauge-needle"></div>

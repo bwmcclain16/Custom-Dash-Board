@@ -69,6 +69,42 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function hexToRgb(hex) {
+  const normalized = ensureHexColor(hex, '#000000').replace('#', '');
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  return '#' + [r, g, b].map((value) => Math.round(value).toString(16).padStart(2, '0')).join('');
+}
+
+function mixColor(start, end, ratio) {
+  const a = hexToRgb(start);
+  const b = hexToRgb(end);
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * ratio,
+    g: a.g + (b.g - a.g) * ratio,
+    b: a.b + (b.b - a.b) * ratio,
+  });
+}
+
+function gaugeColor(display, ratio) {
+  const gauge = display.gauge || {};
+  if (!gauge.useGradient) return display.accentColor;
+  const start = gauge.gradientStartColor || '#22c55e';
+  const mid = gauge.gradientMidColor || '#facc15';
+  const end = gauge.gradientEndColor || '#ef4444';
+  return ratio < 50 ? mixColor(start, mid, ratio / 50) : mixColor(mid, end, (ratio - 50) / 50);
+}
+
+function isCanvasFullscreen() {
+  return document.fullscreenElement === els.canvas;
+}
+
 function updateStatusText() {
   els.dashboardSaveStatus.textContent = state.dirty.dashboard
     ? 'Dashboard changes are live in the editor. Click “Save dashboard” to write them to disk.'
@@ -123,6 +159,20 @@ function getWidgetLayout(widget) {
   };
 }
 
+function getGaugeSettings(widget) {
+  const gauge = widget.display.gauge || {};
+  return {
+    useGradient: Boolean(gauge.useGradient),
+    gradientStartColor: gauge.gradientStartColor || '#22c55e',
+    gradientMidColor: gauge.gradientMidColor || '#facc15',
+    gradientEndColor: gauge.gradientEndColor || '#ef4444',
+    tickCount: Math.max(3, Number(gauge.tickCount ?? 11)),
+    majorTickEvery: Math.max(1, Number(gauge.majorTickEvery ?? 2)),
+    startAngle: Number(gauge.startAngle ?? -120),
+    endAngle: Number(gauge.endAngle ?? 120),
+  };
+}
+
 function applyMovableLayout(element, x, y, align) {
   element.style.left = `${x}px`;
   element.style.top = `${y}px`;
@@ -134,6 +184,19 @@ function alignAnchor(align) {
   if (align === 'center') return 0.5;
   if (align === 'right') return 1;
   return 0;
+}
+
+function renderGaugeMarks(container, settings) {
+  container.innerHTML = '';
+  const span = settings.endAngle - settings.startAngle;
+  for (let index = 0; index < settings.tickCount; index += 1) {
+    const mark = document.createElement('div');
+    const ratio = settings.tickCount === 1 ? 0 : index / (settings.tickCount - 1);
+    const angle = settings.startAngle + span * ratio;
+    mark.className = `widget-gauge-mark ${index % settings.majorTickEvery === 0 ? 'major' : ''}`;
+    mark.style.transform = `translate(-50%, -100%) rotate(${angle}deg) translateY(-120%)`;
+    container.appendChild(mark);
+  }
 }
 
 function buildWidgetElement(widget, runtimeInfo) {
@@ -158,6 +221,7 @@ function buildWidgetElement(widget, runtimeInfo) {
   const gauge = node.querySelector('.widget-gauge');
   const gaugeRing = node.querySelector('.widget-gauge-ring');
   const gaugeNeedle = node.querySelector('.widget-gauge-needle');
+  const gaugeMarks = node.querySelector('.widget-gauge-marks');
   const statusDot = node.querySelector('.widget-status-dot');
   const alertNode = node.querySelector('.widget-alert');
 
@@ -173,21 +237,25 @@ function buildWidgetElement(widget, runtimeInfo) {
   const max = Number(widget.display.max ?? 100);
   const current = Number(runtimeInfo?.value ?? 0);
   const ratio = clamp(((current - min) / Math.max(1, max - min)) * 100, 0, 100);
-  const accent = widget.display.accentColor;
-  meterFill.style.color = accent;
-  statusDot.style.color = accent;
-  gaugeRing.style.color = accent;
-  gaugeNeedle.style.color = accent;
+  const color = gaugeColor(widget.display, ratio);
+  meterFill.style.color = color;
+  statusDot.style.color = color;
+  gaugeRing.style.color = color;
+  gaugeNeedle.style.color = color;
   meterFill.style.width = `${ratio}%`;
-  gaugeRing.style.background = `conic-gradient(${accent} 0deg ${ratio * 3.6}deg, rgba(255,255,255,0.08) ${ratio * 3.6}deg 360deg)`;
-  gaugeNeedle.style.transform = `rotate(${(-120 + ratio * 2.4).toFixed(1)}deg)`;
+
+  const gaugeSettings = getGaugeSettings(widget);
+  const span = gaugeSettings.endAngle - gaugeSettings.startAngle;
+  const needleAngle = gaugeSettings.startAngle + span * (ratio / 100);
+  gaugeRing.style.background = `conic-gradient(from ${gaugeSettings.startAngle + 90}deg, ${color} 0deg ${Math.max(0, span * (ratio / 100))}deg, rgba(255,255,255,0.08) ${Math.max(0, span * (ratio / 100))}deg ${Math.max(0, span)}deg, transparent ${Math.max(0, span)}deg 360deg)`;
+  gaugeNeedle.style.transform = `rotate(${needleAngle}deg)`;
+  renderGaugeMarks(gaugeMarks, gaugeSettings);
   statusDot.style.opacity = `${0.35 + ratio / 150}`;
 
   meter.classList.toggle('hidden', widget.kind === 'gauge' || widget.kind === 'status');
   gauge.classList.toggle('hidden', widget.kind !== 'gauge');
   statusDot.classList.toggle('hidden', widget.kind !== 'status');
-  if (widget.kind === 'bar') meter.style.height = '22px';
-  else meter.style.height = '14px';
+  meter.style.height = widget.kind === 'bar' ? '22px' : '14px';
 
   if (runtimeInfo?.alert) {
     alertNode.textContent = runtimeInfo.alert.message || runtimeInfo.alert.name || 'Alert';
@@ -209,6 +277,16 @@ function buildWidgetElement(widget, runtimeInfo) {
   return node;
 }
 
+function ensureCanvasAlertLayer() {
+  let layer = els.canvas.querySelector('.canvas-alert-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'canvas-alert-layer hidden';
+    els.canvas.appendChild(layer);
+  }
+  return layer;
+}
+
 function renderCanvas() {
   const dashboard = state.config.dashboard;
   els.canvas.classList.toggle('grid', dashboard.showGrid);
@@ -218,10 +296,12 @@ function renderCanvas() {
   els.canvas.style.backgroundColor = dashboard.backgroundColor;
   els.canvas.style.backgroundImage = dashboard.backgroundImage ? `url(${dashboard.backgroundImage})` : 'none';
   els.canvas.innerHTML = '';
+  const canvasAlertLayer = ensureCanvasAlertLayer();
   const runtimeMap = new Map((state.runtime?.widgets || []).map((entry) => [entry.widgetId, entry]));
   [...state.config.widgets].sort((a, b) => (a.z || 1) - (b.z || 1)).forEach((widget) => {
     els.canvas.appendChild(buildWidgetElement(widget, runtimeMap.get(widget.id)));
   });
+  applyDashboardAlertLayer(canvasAlertLayer);
   applyScreenAlertOverlay();
 }
 
@@ -304,6 +384,7 @@ function createDefaultWidget() {
       backgroundColor: '#132033', textColor: '#f8fafc', accentColor: '#38bdf8', borderColor: '#38bdf8',
       borderWidth: 2, borderRadius: 20, backgroundImage: '', showLabel: true, showValue: true,
       layout: { labelX: 16, labelY: 16, valueX: 16, valueY: 52, labelAlign: 'left', valueAlign: 'left' },
+      gauge: { useGradient: false, gradientStartColor: '#22c55e', gradientMidColor: '#facc15', gradientEndColor: '#ef4444', tickCount: 11, majorTickEvery: 2, startAngle: -120, endAngle: 120 },
     },
     alerts: [{ id: `alert-${Date.now()}`, name: 'Warning', operator: 'greater_or_equal', threshold: 90, color: '#ef4444', message: 'WARNING', effect: 'widget_only' }],
   };
@@ -344,7 +425,7 @@ function deleteWidget() {
 }
 
 function beginWidgetDrag(event, widgetId, mode) {
-  if (event.target.closest('input, select, button') || event.target.closest('.movable-part')) return;
+  if (isCanvasFullscreen() || event.target.closest('input, select, button') || event.target.closest('.movable-part')) return;
   event.preventDefault();
   event.stopPropagation();
   selectWidget(widgetId);
@@ -359,6 +440,7 @@ function beginWidgetDrag(event, widgetId, mode) {
 }
 
 function beginPartDrag(event, widgetId, part) {
+  if (isCanvasFullscreen()) return;
   event.preventDefault();
   event.stopPropagation();
   selectWidget(widgetId);
@@ -377,7 +459,7 @@ function beginPartDrag(event, widgetId, part) {
 }
 
 window.addEventListener('pointermove', (event) => {
-  if (!state.dragging) return;
+  if (!state.dragging || isCanvasFullscreen()) return;
   const widget = selectedWidget();
   if (!widget) return;
   const dx = event.clientX - state.dragging.startX;
@@ -432,10 +514,23 @@ async function saveSelectedWidget() {
   await persistConfig(`Saved widget: ${selectedWidget().name}`);
 }
 
+function applyDashboardAlertLayer(layer) {
+  const backgroundAlert = (state.runtime?.widgets || [])
+    .map((entry) => entry.alert)
+    .find((alert) => alert && alert.effect === 'background_flash');
+  if (!backgroundAlert) {
+    layer.className = 'canvas-alert-layer hidden';
+    layer.style.background = 'transparent';
+    return;
+  }
+  layer.className = 'canvas-alert-layer flash';
+  layer.style.background = backgroundAlert.color || '#ef4444';
+}
+
 function applyScreenAlertOverlay() {
   const activeAlert = (state.runtime?.widgets || [])
     .map((entry) => entry.alert)
-    .find((alert) => alert && alert.effect && alert.effect !== 'widget_only');
+    .find((alert) => alert && (alert.effect === 'screen_flash' || alert.effect === 'screen_solid'));
 
   if (!activeAlert) {
     els.screenAlertOverlay.className = 'screen-alert-overlay hidden';
@@ -536,6 +631,7 @@ document.addEventListener('fullscreenchange', () => {
   els.dashboardFullscreenToggle.textContent = document.fullscreenElement === els.canvas
     ? 'Exit dashboard fullscreen'
     : 'Dashboard fullscreen';
+  renderCanvas();
 });
 
 async function init() {

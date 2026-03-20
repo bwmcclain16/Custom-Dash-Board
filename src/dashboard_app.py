@@ -80,6 +80,16 @@ DEFAULT_DISPLAY = {
         "labelAlign": "left",
         "valueAlign": "left",
     },
+    "gauge": {
+        "useGradient": False,
+        "gradientStartColor": "#22c55e",
+        "gradientMidColor": "#facc15",
+        "gradientEndColor": "#ef4444",
+        "tickCount": 11,
+        "majorTickEvery": 2,
+        "startAngle": -120,
+        "endAngle": 120,
+    },
 }
 
 DEFAULT_ALERT = {
@@ -126,14 +136,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "units": "rpm",
                 "samplePeriodMs": 50,
             },
-            "display": {
-                **DEFAULT_DISPLAY,
-                "label": "RPM",
-                "max": 12000,
-                "backgroundColor": "rgba(4,16,30,0.84)",
-                "borderColor": "#60a5fa",
-                "borderRadius": 24,
-            },
             "alerts": [
                 {
                     "id": "alert-high-rpm",
@@ -144,6 +146,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
                     "message": "SHIFT NOW",
                 }
             ],
+            "display": {
+                **DEFAULT_DISPLAY,
+                "label": "RPM",
+                "max": 12000,
+                "backgroundColor": "rgba(4,16,30,0.84)",
+                "borderColor": "#60a5fa",
+                "borderRadius": 24,
+                "gauge": {
+                    **DEFAULT_DISPLAY["gauge"],
+                    "useGradient": True,
+                    "tickCount": 13,
+                    "majorTickEvery": 2,
+                },
+            },
         },
         {
             "id": "widget-coolant",
@@ -353,6 +369,7 @@ ALERT_EFFECT_ALIASES = {
     "widget_only": "widget_only",
     "screen_flash": "screen_flash",
     "screen_solid": "screen_solid",
+    "background_flash": "background_flash",
     "flash": "screen_flash",
     "solid": "screen_solid",
 }
