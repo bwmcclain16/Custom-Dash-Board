@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Motorsport Dashboard Builder</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="screen-alert-overlay" class="screen-alert-overlay hidden">
+    <div id="screen-alert-message" class="screen-alert-message"></div>
+  </div>
+
+  <div class="shell">
+    <aside class="sidebar left-panel">
+      <h1>Motorsport Dashboard</h1>
+      <p class="muted">No-code dashboard builder for CAN-driven motorsport displays.</p>
+      <div class="stack">
+        <button id="add-widget">+ Add widget</button>
+        <button id="save-config" class="secondary">Save dashboard</button>
+        <button id="import-config-button" class="secondary">Import configuration</button>
+        <input id="import-config-input" type="file" accept="application/json" class="hidden">
+        <button id="duplicate-widget" class="secondary">Duplicate widget</button>
+        <button id="delete-widget" class="danger">Delete selected</button>
+      </div>
+
+      <section class="panel-section">
+        <h2>Runtime</h2>
+        <div id="runtime-status" class="badge">Loading…</div>
+        <p class="tiny">Use virtual CAN mode for testing on any Raspberry Pi 5 or LattePanda IOTA. Switch the CAN interface in the settings panel for live hardware.</p>
+      </section>
+
+      <section class="panel-section">
+        <h2>Widgets</h2>
+        <div id="widget-list" class="widget-list"></div>
+      </section>
+
+      <section class="panel-section">
+        <h2>CAN Simulator</h2>
+        <label>CAN ID <input id="sim-can-id" value="0x100"></label>
+        <label>Bytes (comma separated) <input id="sim-data" value="64,31,0,0,0,0,0,0"></label>
+        <button id="inject-frame" class="secondary">Inject frame</button>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <div class="toolbar">
+        <div>
+          <strong id="dashboard-name">Dashboard</strong>
+          <span class="muted">Drag widgets around, resize them, and drag text/value items inside the widget itself. Widgets lock automatically in dashboard fullscreen.</span>
+        </div>
+        <div class="toolbar-actions">
+          <button id="dashboard-fullscreen-toggle" class="secondary">Dashboard fullscreen</button>
+          <label class="inline-toggle"><input type="checkbox" id="toggle-grid" checked> Show grid</label>
+          <label>Refresh <input id="refresh-rate" type="number" min="50" step="50" value="250"> ms</label>
+        </div>
+      </div>
+      <div class="canvas-shell">
+        <div id="canvas" class="canvas"></div>
+      </div>
+    </main>
+
+    <aside class="sidebar right-panel">
+      <section class="panel-section">
+        <h2>Dashboard</h2>
+        <label>Name <input id="dashboard-title"></label>
+        <label>Width <input id="dashboard-width" type="number"></label>
+        <label>Height <input id="dashboard-height" type="number"></label>
+        <label>Background color <input id="dashboard-bg" type="color"></label>
+        <div class="upload-row">
+          <button id="dashboard-bg-upload-button" type="button" class="secondary">Upload dashboard background</button>
+          <input id="dashboard-bg-upload" type="file" accept="image/*" class="hidden">
+          <div id="dashboard-bg-status" class="tiny">No background image uploaded.</div>
+        </div>
+        <label>Grid size <input id="dashboard-grid" type="number" min="8" step="4"></label>
+        <div id="dashboard-save-status" class="tiny">Dashboard changes are live in the editor. Use “Save dashboard” to write them to disk.</div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-header">
+          <h2>Widget Editor</h2>
+          <button id="save-widget" type="button" class="secondary">Save widget</button>
+        </div>
+        <div id="empty-state" class="empty-state">Select a widget to customize every detail.</div>
+        <div id="widget-save-status" class="tiny hidden">Widget changes are live in the preview. Use “Save widget” to write them to disk.</div>
+        <form id="widget-form" class="widget-form hidden">
+          <label>Name <input name="name"></label>
+          <label>Kind
+            <select name="kind">
+              <option value="value">Value</option>
+              <option value="gauge">Gauge</option>
+              <option value="gauge_value">Gauge + value</option>
+              <option value="bar">Bar</option>
+              <option value="status">Status</option>
+              <option value="tire">Tire widget</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>X <input name="x" type="number"></label>
+            <label>Y <input name="y" type="number"></label>
+            <label>Width <input name="w" type="number"></label>
+            <label>Height <input name="h" type="number"></label>
+          </div>
+
+          <h3>CAN Data</h3>
+          <div data-kind-hide="tire">
+            <label>CAN ID <input name="source.canId"></label>
+          </div>
+          <div class="two-col" data-kind-hide="tire">
+            <label>Start byte <input name="source.startByte" type="number"></label>
+            <label>Byte length <input name="source.byteLength" type="number"></label>
+            <label>Scale <input name="source.scale" type="number" step="0.01"></label>
+            <label>Offset <input name="source.offset" type="number" step="0.01"></label>
+            <label>Fallback <input name="source.fallback" type="number" step="0.01"></label>
+            <label>Units <input name="source.units"></label>
+          </div>
+          <label data-kind-hide="tire">Endian
+            <select name="source.endian">
+              <option value="little">Little endian</option>
+              <option value="big">Big endian</option>
+            </select>
+          </label>
+          <label class="inline-toggle" data-kind-hide="tire"><input name="source.signed" type="checkbox"> Signed signal</label>
+          <div class="stack kind-only hidden" data-kind-only="tire">
+            <div class="tiny">Each tire uses the shared decoding settings below, but can listen to its own CAN ID.</div>
+            <div class="two-col">
+              <label>LF CAN ID <input name="source.tires.lf.canId"></label>
+              <label>RF CAN ID <input name="source.tires.rf.canId"></label>
+              <label>RR CAN ID <input name="source.tires.rr.canId"></label>
+              <label>LR CAN ID <input name="source.tires.lr.canId"></label>
+            </div>
+            <div class="two-col">
+              <label>Start byte <input name="source.startByte" type="number"></label>
+              <label>Byte length <input name="source.byteLength" type="number"></label>
+              <label>Scale <input name="source.scale" type="number" step="0.01"></label>
+              <label>Offset <input name="source.offset" type="number" step="0.01"></label>
+              <label>Fallback <input name="source.fallback" type="number" step="0.01"></label>
+              <label>Units <input name="source.units"></label>
+            </div>
+            <label>Endian
+              <select name="source.endian">
+                <option value="little">Little endian</option>
+                <option value="big">Big endian</option>
+              </select>
+            </label>
+            <label class="inline-toggle"><input name="source.signed" type="checkbox"> Signed signal</label>
+          </div>
+
+          <h3>Display</h3>
+          <label>Label <input name="display.label"></label>
+          <div class="two-col">
+            <label>Decimals <input name="display.decimalPlaces" type="number"></label>
+            <label>Min <input name="display.min" type="number" step="0.1"></label>
+            <label>Max <input name="display.max" type="number" step="0.1"></label>
+            <label>Border width <input name="display.borderWidth" type="number"></label>
+            <label>Radius <input name="display.borderRadius" type="number"></label>
+          </div>
+          <label>Prefix <input name="display.prefix"></label>
+          <label>Suffix <input name="display.suffix"></label>
+          <label>Background color <input name="display.backgroundColor" type="color"></label>
+          <label>Text color <input name="display.textColor" type="color"></label>
+          <label>Accent color <input name="display.accentColor" type="color"></label>
+          <label>Border color <input name="display.borderColor" type="color"></label>
+          <div class="upload-row">
+            <button id="widget-bg-upload-button" type="button" class="secondary">Upload widget background</button>
+            <input id="widget-bg-upload" type="file" accept="image/*" class="hidden">
+            <div id="widget-bg-status" class="tiny">No widget background uploaded.</div>
+          </div>
+          <label>Image opacity <input name="display.imageOpacity" type="range" min="0" max="1" step="0.05"></label>
+          <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
+          <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
+
+          <h3>Gauge</h3>
+          <label class="inline-toggle"><input name="display.gauge.useGradient" type="checkbox"> Use value-based gauge gradient</label>
+          <div class="two-col">
+            <label>Gradient start <input name="display.gauge.gradientStartColor" type="color"></label>
+            <label>Gradient mid <input name="display.gauge.gradientMidColor" type="color"></label>
+            <label>Gradient end <input name="display.gauge.gradientEndColor" type="color"></label>
+            <label>Tick count <input name="display.gauge.tickCount" type="number" min="3"></label>
+            <label>Major tick every <input name="display.gauge.majorTickEvery" type="number" min="1"></label>
+            <label>Start angle <input name="display.gauge.startAngle" type="number"></label>
+            <label>End angle <input name="display.gauge.endAngle" type="number"></label>
+          </div>
+
+          <h3>Text & Value Position</h3>
+          <div class="two-col">
+            <label>Label X <input name="display.layout.labelX" type="number"></label>
+            <label>Label Y <input name="display.layout.labelY" type="number"></label>
+            <label>Value X <input name="display.layout.valueX" type="number"></label>
+            <label>Value Y <input name="display.layout.valueY" type="number"></label>
+          </div>
+          <div class="two-col">
+            <label>Label align
+              <select name="display.layout.labelAlign">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <label>Value align
+              <select name="display.layout.valueAlign">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+          </div>
+          <p class="tiny">Tip: select a widget, then drag the label or value directly inside the widget preview to reposition them.</p>
+
+          <h3>Alert</h3>
+          <label>Alert name <input name="alerts.0.name"></label>
+          <label>Raise alert when value is
+            <select name="alerts.0.operator">
+              <option value="greater_or_equal">At or above</option>
+              <option value="greater_than">Above</option>
+              <option value="less_or_equal">At or below</option>
+              <option value="less_than">Below</option>
+              <option value="equal_to">Exactly equal to</option>
+              <option value="not_equal_to">Not equal to</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>Threshold <input name="alerts.0.threshold" type="number" step="0.1"></label>
+            <label>Alert color <input name="alerts.0.color" type="color"></label>
+          </div>
+          <label>Alert text <input name="alerts.0.message"></label>
+          <label>Alert effect
+            <select name="alerts.0.effect">
+              <option value="widget_only">Highlight only this widget</option>
+              <option value="background_flash">Flash the dashboard background</option>
+              <option value="screen_flash">Flash the entire screen</option>
+              <option value="screen_solid">Hold the entire screen solid</option>
+            </select>
+          </label>
+        </form>
+      </section>
+    </aside>
+  </div>
+
+  <template id="widget-template">
+    <article class="dashboard-widget">
+      <div class="widget-content">
+        <div class="widget-image-layer"></div>
+        <span class="widget-title movable-part" data-part="label"></span>
+        <span class="widget-value movable-part" data-part="value"></span>
+          <div class="widget-visual">
+            <div class="widget-meter"><div class="widget-meter-fill"></div></div>
+            <div class="widget-gauge hidden">
+              <div class="widget-gauge-marks"></div>
+              <div class="widget-gauge-ring"></div>
+              <div class="widget-gauge-inner"></div>
+              <div class="widget-gauge-needle"></div>
+            </div>
+            <div class="widget-status-dot hidden"></div>
+            <div class="widget-tire-grid hidden">
+              <div class="tire-card tire-card-lf" data-tire-position="lf">
+                <div class="tire-card-label">LF</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-rf" data-tire-position="rf">
+                <div class="tire-card-label">RF</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-lr" data-tire-position="lr">
+                <div class="tire-card-label">LR</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-rr" data-tire-position="rr">
+                <div class="tire-card-label">RR</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-widget-center">Tires</div>
+            </div>
+          </div>
+        <div class="widget-alert hidden"></div>
+      </div>
+      <div class="resize-handle"></div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>

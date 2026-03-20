@@ -1,0 +1,187 @@
+{
+  "dashboard": {
+    "name": "Motorsport Command Center",
+    "width": 1280,
+    "height": 720,
+    "backgroundColor": "#08111f",
+    "backgroundImage": "",
+    "gridSize": 16,
+    "showGrid": true,
+    "fontFamily": "Inter, Arial, sans-serif"
+  },
+  "can": {
+    "interface": "virtual",
+    "channel": "motorsport-dashboard",
+    "bitrate": 500000,
+    "dbc": "",
+    "pollIntervalMs": 100
+  },
+  "widgets": [
+    {
+      "id": "widget-rpm",
+      "name": "Engine RPM",
+      "kind": "gauge",
+      "x": 48,
+      "y": 48,
+      "w": 300,
+      "h": 220,
+      "z": 1,
+      "source": {
+        "canId": "0x100",
+        "startByte": 0,
+        "byteLength": 2,
+        "endian": "little",
+        "signed": false,
+        "scale": 1,
+        "offset": 0,
+        "units": "rpm",
+        "samplePeriodMs": 50,
+        "fallback": 0,
+        "valueMap": {}
+      },
+      "display": {
+        "label": "RPM",
+        "decimalPlaces": 0,
+        "prefix": "",
+        "suffix": "",
+        "min": 0,
+        "max": 12000,
+        "backgroundColor": "rgba(4,16,30,0.84)",
+        "textColor": "#f8fafc",
+        "accentColor": "#38bdf8",
+        "borderColor": "#60a5fa",
+        "borderWidth": 2,
+        "borderRadius": 24,
+        "backgroundImage": "",
+        "showLabel": true,
+        "showValue": true
+      },
+      "alerts": [
+        {
+          "id": "alert-high-rpm",
+          "name": "Over-rev",
+          "operator": ">=",
+          "threshold": 10500,
+          "color": "#ef4444",
+          "message": "SHIFT NOW"
+        }
+      ]
+    },
+    {
+      "id": "widget-coolant",
+      "name": "Coolant Temp",
+      "kind": "value",
+      "x": 380,
+      "y": 78,
+      "w": 240,
+      "h": 180,
+      "z": 2,
+      "source": {
+        "canId": "0x101",
+        "startByte": 2,
+        "byteLength": 1,
+        "endian": "little",
+        "signed": false,
+        "scale": 1,
+        "offset": -40,
+        "units": "°C",
+        "samplePeriodMs": 100,
+        "fallback": 0,
+        "valueMap": {}
+      },
+      "display": {
+        "label": "Coolant",
+        "decimalPlaces": 0,
+        "prefix": "",
+        "suffix": "",
+        "min": 0,
+        "max": 140,
+        "backgroundColor": "rgba(15,23,42,0.86)",
+        "textColor": "#e2e8f0",
+        "accentColor": "#22c55e",
+        "borderColor": "#22c55e",
+        "borderWidth": 2,
+        "borderRadius": 20,
+        "backgroundImage": "",
+        "showLabel": true,
+        "showValue": true
+      },
+      "alerts": [
+        {
+          "id": "alert-high-temp",
+          "name": "Temp Warning",
+          "operator": ">=",
+          "threshold": 110,
+          "color": "#f97316",
+          "message": "COOLANT HOT"
+        }
+      ]
+    },
+    {
+      "id": "widget-tires",
+      "name": "Tire Temps",
+      "kind": "tire",
+      "x": 664,
+      "y": 48,
+      "w": 320,
+      "h": 320,
+      "z": 3,
+      "source": {
+        "canId": "0x110",
+        "startByte": 0,
+        "byteLength": 1,
+        "endian": "little",
+        "signed": false,
+        "scale": 1,
+        "offset": 0,
+        "units": "°C",
+        "samplePeriodMs": 100,
+        "fallback": 0,
+        "valueMap": {},
+        "tires": {
+          "lf": {
+            "canId": "0x110"
+          },
+          "rf": {
+            "canId": "0x111"
+          },
+          "rr": {
+            "canId": "0x112"
+          },
+          "lr": {
+            "canId": "0x113"
+          }
+        }
+      },
+      "display": {
+        "label": "Tires",
+        "decimalPlaces": 0,
+        "prefix": "",
+        "suffix": "",
+        "min": 0,
+        "max": 140,
+        "backgroundColor": "rgba(15,23,42,0.88)",
+        "textColor": "#f8fafc",
+        "accentColor": "#f97316",
+        "borderColor": "#fb923c",
+        "borderWidth": 2,
+        "borderRadius": 28,
+        "backgroundImage": "",
+        "imageOpacity": 1,
+        "showLabel": true,
+        "showValue": false
+      },
+      "alerts": [
+        {
+          "id": "alert-hot-tire",
+          "name": "Tire Temp",
+          "operator": "greater_or_equal",
+          "threshold": 105,
+          "color": "#ef4444",
+          "message": "TIRE HOT",
+          "effect": "widget_only"
+        }
+      ]
+    }
+  ]
+}
