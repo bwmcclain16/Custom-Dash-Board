@@ -52,6 +52,7 @@ class DashboardAppTests(unittest.TestCase):
         config = normalize_config({"widgets": [{"name": "Oil Temp", "alerts": [{"threshold": 125, "effect": "solid"}]}]})
         widget = config["widgets"][0]
         self.assertEqual(widget["display"]["borderWidth"], 2)
+        self.assertEqual(widget["display"]["imageOpacity"], 1.0)
         self.assertEqual(widget["display"]["layout"]["labelX"], 16)
         self.assertEqual(widget["display"]["gauge"]["tickCount"], 11)
         self.assertEqual(widget["alerts"][0]["operator"], "greater_or_equal")

@@ -70,6 +70,7 @@ DEFAULT_DISPLAY = {
     "borderWidth": 2,
     "borderRadius": 20,
     "backgroundImage": "",
+    "imageOpacity": 1.0,
     "showLabel": True,
     "showValue": True,
     "layout": {

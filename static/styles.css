@@ -150,6 +150,15 @@ input[type="color"] { min-height: 44px; padding: 0.2rem; }
   height: 100%;
   padding: 1rem;
 }
+.widget-image-layer {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  z-index: 1;
+  pointer-events: none;
+}
 .widget-title,
 .widget-value {
   position: absolute;
@@ -281,13 +290,11 @@ input[type="color"] { min-height: 44px; padding: 0.2rem; }
 }
 .resize-handle {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 18px;
-  height: 18px;
-  border-right: 3px solid rgba(255,255,255,0.72);
-  border-bottom: 3px solid rgba(255,255,255,0.72);
-  border-radius: 0 0 8px 0;
+  right: -8px;
+  bottom: -8px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
   cursor: nwse-resize;
   z-index: 6;
 }

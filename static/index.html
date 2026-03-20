@@ -139,6 +139,7 @@
             <input id="widget-bg-upload" type="file" accept="image/*" class="hidden">
             <div id="widget-bg-status" class="tiny">No widget background uploaded.</div>
           </div>
+          <label>Image opacity <input name="display.imageOpacity" type="range" min="0" max="1" step="0.05"></label>
           <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
           <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
 
@@ -212,6 +213,7 @@
   <template id="widget-template">
     <article class="dashboard-widget">
       <div class="widget-content">
+        <div class="widget-image-layer"></div>
         <span class="widget-title movable-part" data-part="label"></span>
         <span class="widget-value movable-part" data-part="value"></span>
         <div class="widget-visual">

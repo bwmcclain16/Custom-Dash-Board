@@ -17,7 +17,7 @@ This project uses Python plus a built-in web server and a vanilla HTML/CSS/JS fr
 - **Dashboard editor** with drag-and-drop placement, resize handles, dashboard fullscreen mode that locks widget editing, and draggable label/value positioning inside each widget.
 - **No-code widget setup** through a right-side properties panel with per-widget save.
 - **CAN-driven widgets** configured by CAN ID, start byte, byte length, scaling, offset, endianness, signedness, units, and fallback values.
-- **Per-widget styling** including label, value formatting, colors, borders, radius, uploaded background images, and configurable gauge gradients / tick marks.
+- **Per-widget styling** including label, value formatting, colors, borders, radius, uploaded/scaled background images with opacity control, and configurable gauge gradients / tick marks.
 - **Per-widget alerts** with readable condition phrases, thresholds, colors, custom warning text, and widget-only / dashboard-background flash / full-screen flash / full-screen solid alert behaviors.
 - **Built-in CAN simulator** so you can validate layouts before wiring the real bus.
 - **Persistent configuration** saved to `dashboard_config.json`, plus JSON config import support and uploaded image storage inside the saved config.

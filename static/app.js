@@ -225,9 +225,10 @@ function buildWidgetElement(widget, runtimeInfo) {
   node.style.color = widget.display.textColor;
   node.style.border = `${widget.display.borderWidth}px solid ${widget.display.borderColor}`;
   node.style.borderRadius = `${widget.display.borderRadius}px`;
-  node.style.backgroundImage = widget.display.backgroundImage ? `url(${widget.display.backgroundImage})` : 'none';
+  node.style.backgroundImage = 'none';
   node.classList.toggle('selected', widget.id === state.selectedWidgetId);
 
+  const imageLayer = node.querySelector('.widget-image-layer');
   const title = node.querySelector('.widget-title');
   const value = node.querySelector('.widget-value');
   const meter = node.querySelector('.widget-meter');
@@ -238,6 +239,9 @@ function buildWidgetElement(widget, runtimeInfo) {
   const gaugeMarks = node.querySelector('.widget-gauge-marks');
   const statusDot = node.querySelector('.widget-status-dot');
   const alertNode = node.querySelector('.widget-alert');
+
+  imageLayer.style.backgroundImage = widget.display.backgroundImage ? `url(${widget.display.backgroundImage})` : 'none';
+  imageLayer.style.opacity = `${Number(widget.display.imageOpacity ?? 1)}`;
 
   const layout = getWidgetLayout(widget);
   title.textContent = widget.display.showLabel ? (widget.display.label || widget.name) : '';
@@ -460,6 +464,9 @@ function beginPartDrag(event, widgetId, part) {
   event.stopPropagation();
   selectWidget(widgetId);
   const widget = selectedWidget();
+  imageLayer.style.backgroundImage = widget.display.backgroundImage ? `url(${widget.display.backgroundImage})` : 'none';
+  imageLayer.style.opacity = `${Number(widget.display.imageOpacity ?? 1)}`;
+
   const layout = getWidgetLayout(widget);
   const keyX = part === 'label' ? 'labelX' : 'valueX';
   const keyY = part === 'label' ? 'labelY' : 'valueY';
