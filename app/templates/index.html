@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom Motorsport Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Motorsport Dashboard Studio</h1>
+        <p>Create CAN-driven race dashboards without coding widgets.</p>
+      </div>
+
+      <section class="panel">
+        <h2>Dashboard</h2>
+        <label>Name <input id="dash-name" type="text" /></label>
+        <div class="grid two-col">
+          <label>Width <input id="dash-width" type="number" min="640" /></label>
+          <label>Height <input id="dash-height" type="number" min="360" /></label>
+        </div>
+        <label>Background color <input id="theme-background" type="color" /></label>
+        <label>Grid color <input id="theme-grid" type="color" value="#94a3b8" /></label>
+        <label>Background image URL <input id="theme-image" type="text" placeholder="https://..." /></label>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Widgets</h2>
+          <button id="add-widget" type="button">Add widget</button>
+        </div>
+        <label>Select widget
+          <select id="widget-picker"></select>
+        </label>
+        <label>Title <input id="widget-title" type="text" /></label>
+        <label>Type
+          <select id="widget-kind">
+            <option value="value">Value</option>
+            <option value="gauge">Gauge</option>
+            <option value="bar">Bar</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
+        <div class="grid two-col">
+          <label>Unit <input id="widget-unit" type="text" /></label>
+          <label>Precision <input id="widget-precision" type="number" min="0" max="3" /></label>
+        </div>
+        <div class="grid two-col">
+          <label>Min <input id="widget-min" type="number" /></label>
+          <label>Max <input id="widget-max" type="number" /></label>
+        </div>
+        <label>Description <textarea id="widget-description"></textarea></label>
+      </section>
+
+      <section class="panel">
+        <h2>CAN Mapping</h2>
+        <div class="grid two-col">
+          <label>CAN ID <input id="source-can-id" type="text" placeholder="0x100" /></label>
+          <label>Type
+            <select id="source-type">
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="hex">Hex</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid three-col">
+          <label>Start byte <input id="source-start" type="number" min="0" /></label>
+          <label>Length <input id="source-length" type="number" min="1" max="8" /></label>
+          <label>Bit index <input id="source-bit" type="number" min="0" max="7" /></label>
+        </div>
+        <div class="grid three-col">
+          <label>Scale <input id="source-scale" type="number" step="0.01" /></label>
+          <label>Offset <input id="source-offset" type="number" step="0.01" /></label>
+          <label>Signed
+            <select id="source-signed">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </label>
+        </div>
+        <label>Endianness
+          <select id="source-endian">
+            <option value="little">Little endian</option>
+            <option value="big">Big endian</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Widget Style</h2>
+        <div class="grid three-col compact">
+          <label>Background <input id="style-bg" type="color" /></label>
+          <label>Text <input id="style-text" type="color" /></label>
+          <label>Accent <input id="style-accent" type="color" /></label>
+        </div>
+        <div class="grid three-col compact">
+          <label>Border <input id="style-border" type="color" /></label>
+          <label>Border width <input id="style-border-width" type="number" min="0" max="12" /></label>
+          <label>Radius <input id="style-radius" type="number" min="0" max="40" /></label>
+        </div>
+        <div class="grid two-col">
+          <label>Label size <input id="style-font" type="number" min="10" max="40" /></label>
+          <label>Value size <input id="style-value-font" type="number" min="14" max="80" /></label>
+        </div>
+        <label>Background image URL <input id="style-image" type="text" placeholder="https://..." /></label>
+        <label>Show border
+          <select id="style-show-border">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </label>
+        <label>Status warning text <input id="widget-warning" type="text" placeholder="Shown when true" /></label>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Alerts</h2>
+          <button id="add-alert" type="button">Add alert</button>
+        </div>
+        <div id="alerts-list" class="alerts-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>CAN Bus</h2>
+        <div class="grid three-col">
+          <label>Interface <input id="bus-interface" type="text" value="virtual" /></label>
+          <label>Channel <input id="bus-channel" type="text" value="demo" /></label>
+          <label>Bitrate <input id="bus-bitrate" type="number" value="500000" /></label>
+        </div>
+        <button id="apply-bus" type="button">Apply bus settings</button>
+        <div id="bus-status" class="status-line"></div>
+      </section>
+
+      <section class="panel actions">
+        <button id="save-config" type="button">Save layout</button>
+        <button id="duplicate-widget" type="button">Duplicate widget</button>
+        <button id="delete-widget" type="button" class="danger">Delete widget</button>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <div class="workspace-header">
+        <h2>Dashboard Editor</h2>
+        <p>Drag widgets on the canvas, then use the menu to fine tune styling, CAN inputs, and alerts.</p>
+      </div>
+      <div id="dashboard-canvas" class="dashboard-canvas"></div>
+    </main>
+  </div>
+
+  <template id="alert-template">
+    <div class="alert-card">
+      <div class="grid two-col">
+        <label>Label <input data-field="label" type="text" /></label>
+        <label>Comparator
+          <select data-field="comparator">
+            <option value="gt">&gt;</option>
+            <option value="gte">&gt;=</option>
+            <option value="lt">&lt;</option>
+            <option value="lte">&lt;=</option>
+            <option value="eq">=</option>
+            <option value="between">between</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid two-col">
+        <label>Threshold <input data-field="threshold" type="number" step="0.1" /></label>
+        <label>Second threshold <input data-field="secondary_threshold" type="number" step="0.1" /></label>
+      </div>
+      <div class="grid two-col compact">
+        <label>Color <input data-field="color" type="color" /></label>
+        <label>Background <input data-field="background_color" type="color" value="#ff4d4f" /></label>
+      </div>
+      <label>Message <input data-field="message" type="text" /></label>
+      <button data-action="remove-alert" type="button" class="danger small">Remove alert</button>
+    </div>
+  </template>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
