@@ -92,6 +92,7 @@
               <option value="gauge_value">Gauge + value</option>
               <option value="bar">Bar</option>
               <option value="status">Status</option>
+              <option value="tire">Tire widget</option>
             </select>
           </label>
           <div class="two-col">
@@ -102,8 +103,10 @@
           </div>
 
           <h3>CAN Data</h3>
-          <label>CAN ID <input name="source.canId"></label>
-          <div class="two-col">
+          <div data-kind-hide="tire">
+            <label>CAN ID <input name="source.canId"></label>
+          </div>
+          <div class="two-col" data-kind-hide="tire">
             <label>Start byte <input name="source.startByte" type="number"></label>
             <label>Byte length <input name="source.byteLength" type="number"></label>
             <label>Scale <input name="source.scale" type="number" step="0.01"></label>
@@ -111,13 +114,37 @@
             <label>Fallback <input name="source.fallback" type="number" step="0.01"></label>
             <label>Units <input name="source.units"></label>
           </div>
-          <label>Endian
+          <label data-kind-hide="tire">Endian
             <select name="source.endian">
               <option value="little">Little endian</option>
               <option value="big">Big endian</option>
             </select>
           </label>
-          <label class="inline-toggle"><input name="source.signed" type="checkbox"> Signed signal</label>
+          <label class="inline-toggle" data-kind-hide="tire"><input name="source.signed" type="checkbox"> Signed signal</label>
+          <div class="stack kind-only hidden" data-kind-only="tire">
+            <div class="tiny">Each tire uses the shared decoding settings below, but can listen to its own CAN ID.</div>
+            <div class="two-col">
+              <label>LF CAN ID <input name="source.tires.lf.canId"></label>
+              <label>RF CAN ID <input name="source.tires.rf.canId"></label>
+              <label>RR CAN ID <input name="source.tires.rr.canId"></label>
+              <label>LR CAN ID <input name="source.tires.lr.canId"></label>
+            </div>
+            <div class="two-col">
+              <label>Start byte <input name="source.startByte" type="number"></label>
+              <label>Byte length <input name="source.byteLength" type="number"></label>
+              <label>Scale <input name="source.scale" type="number" step="0.01"></label>
+              <label>Offset <input name="source.offset" type="number" step="0.01"></label>
+              <label>Fallback <input name="source.fallback" type="number" step="0.01"></label>
+              <label>Units <input name="source.units"></label>
+            </div>
+            <label>Endian
+              <select name="source.endian">
+                <option value="little">Little endian</option>
+                <option value="big">Big endian</option>
+              </select>
+            </label>
+            <label class="inline-toggle"><input name="source.signed" type="checkbox"> Signed signal</label>
+          </div>
 
           <h3>Display</h3>
           <label>Label <input name="display.label"></label>
@@ -216,16 +243,39 @@
         <div class="widget-image-layer"></div>
         <span class="widget-title movable-part" data-part="label"></span>
         <span class="widget-value movable-part" data-part="value"></span>
-        <div class="widget-visual">
-          <div class="widget-meter"><div class="widget-meter-fill"></div></div>
-          <div class="widget-gauge hidden">
-            <div class="widget-gauge-marks"></div>
-            <div class="widget-gauge-ring"></div>
-            <div class="widget-gauge-inner"></div>
-            <div class="widget-gauge-needle"></div>
+          <div class="widget-visual">
+            <div class="widget-meter"><div class="widget-meter-fill"></div></div>
+            <div class="widget-gauge hidden">
+              <div class="widget-gauge-marks"></div>
+              <div class="widget-gauge-ring"></div>
+              <div class="widget-gauge-inner"></div>
+              <div class="widget-gauge-needle"></div>
+            </div>
+            <div class="widget-status-dot hidden"></div>
+            <div class="widget-tire-grid hidden">
+              <div class="tire-card tire-card-lf" data-tire-position="lf">
+                <div class="tire-card-label">LF</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-rf" data-tire-position="rf">
+                <div class="tire-card-label">RF</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-lr" data-tire-position="lr">
+                <div class="tire-card-label">LR</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-card tire-card-rr" data-tire-position="rr">
+                <div class="tire-card-label">RR</div>
+                <div class="tire-shape"><div class="tire-shape-inner"></div></div>
+                <div class="tire-card-value">—</div>
+              </div>
+              <div class="tire-widget-center">Tires</div>
+            </div>
           </div>
-          <div class="widget-status-dot hidden"></div>
-        </div>
         <div class="widget-alert hidden"></div>
       </div>
       <div class="resize-handle"></div>

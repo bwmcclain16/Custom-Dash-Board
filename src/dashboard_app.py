@@ -56,6 +56,13 @@ DEFAULT_SOURCE = {
     "valueMap": {},
 }
 
+DEFAULT_TIRE_SOURCE = {
+    "lf": {"canId": "0x110"},
+    "rf": {"canId": "0x111"},
+    "rr": {"canId": "0x112"},
+    "lr": {"canId": "0x113"},
+}
+
 DEFAULT_DISPLAY = {
     "label": "Widget",
     "decimalPlaces": 0,
@@ -115,6 +122,14 @@ DEFAULT_WIDGET = {
     "source": DEFAULT_SOURCE,
     "display": DEFAULT_DISPLAY,
     "alerts": [DEFAULT_ALERT],
+}
+
+TIRE_POSITIONS = ("lf", "rf", "rr", "lr")
+TIRE_LABELS = {
+    "lf": "LF",
+    "rf": "RF",
+    "rr": "RR",
+    "lr": "LR",
 }
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -194,6 +209,42 @@ DEFAULT_CONFIG: dict[str, Any] = {
                     "threshold": 110,
                     "color": "#f97316",
                     "message": "COOLANT HOT",
+                }
+            ],
+        },
+        {
+            "id": "widget-tires",
+            "name": "Tire Temps",
+            "kind": "tire",
+            "x": 664,
+            "y": 48,
+            "w": 320,
+            "h": 320,
+            "z": 3,
+            "source": {
+                **DEFAULT_SOURCE,
+                "canId": "0x110",
+                "units": "°C",
+                "tires": deepcopy(DEFAULT_TIRE_SOURCE),
+            },
+            "display": {
+                **DEFAULT_DISPLAY,
+                "label": "Tires",
+                "max": 140,
+                "backgroundColor": "rgba(15,23,42,0.88)",
+                "accentColor": "#f97316",
+                "borderColor": "#fb923c",
+                "borderRadius": 28,
+            },
+            "alerts": [
+                {
+                    "id": "alert-hot-tire",
+                    "name": "Tire Temp",
+                    "operator": "greater_or_equal",
+                    "threshold": 105,
+                    "color": "#ef4444",
+                    "message": "TIRE HOT",
+                    "effect": "widget_only",
                 }
             ],
         },
@@ -278,8 +329,17 @@ class CanMonitor:
         while not self.stop_event.is_set():
             rpm = int(2800 + 1800 * (1 + math.sin(phase)))
             coolant = int(72 + 12 * (1 + math.sin(phase / 3.0)))
+            tire_base = 78 + 8 * (1 + math.sin(phase / 2.0))
+            tire_values = {
+                0x110: int(tire_base + 4 * math.sin(phase + 0.2)),
+                0x111: int(tire_base + 3 * math.sin(phase + 0.9)),
+                0x112: int(tire_base + 5 * math.sin(phase + 1.5)),
+                0x113: int(tire_base + 2 * math.sin(phase + 2.3)),
+            }
             self.inject_frame(0x100, [rpm & 0xFF, (rpm >> 8) & 0xFF, 0, 0, 0, 0, 0, 0])
             self.inject_frame(0x101, [0, 0, max(0, coolant + 40), 0, 0, 0, 0, 0])
+            for can_id, temperature in tire_values.items():
+                self.inject_frame(can_id, [max(0, temperature), 0, 0, 0, 0, 0, 0, 0])
             phase += 0.08
             time.sleep(0.1)
 
@@ -301,6 +361,8 @@ class CanMonitor:
             return {f"0x{frame_id:X}": asdict(record) for frame_id, record in sorted(self.frames.items())}
 
     def decode_widget(self, widget: dict[str, Any]) -> dict[str, Any]:
+        if widget.get("kind") == "tire":
+            return self.decode_tire_widget(widget)
         source = widget.get("source", {})
         can_id = parse_can_id(source.get("canId", "0"))
         fallback = source.get("fallback", 0)
@@ -323,6 +385,55 @@ class CanMonitor:
             "formatted": formatted,
             "updatedAt": updated_at,
             "alert": alert,
+        }
+
+    def decode_tire_widget(self, widget: dict[str, Any]) -> dict[str, Any]:
+        source = widget.get("source", {})
+        display = widget.get("display", {})
+        tires_config = source.get("tires", {}) or {}
+        fallback = source.get("fallback", 0)
+        decimals = int(display.get("decimalPlaces", 0))
+        suffix = display.get("suffix", "") or source.get("units", "")
+        tire_values: dict[str, Any] = {}
+        active_alert: dict[str, Any] | None = None
+        latest_timestamp: float | None = None
+
+        for position in TIRE_POSITIONS:
+            tire_source = deep_merge(source, tires_config.get(position, {}))
+            can_id = parse_can_id(tire_source.get("canId", "0"))
+            with self.lock:
+                frame = self.frames.get(can_id)
+            if not frame:
+                value = fallback
+                updated_at = None
+            else:
+                value = decode_signal(frame.data, tire_source)
+                updated_at = frame.timestamp
+            tire_alert = evaluate_alerts(value, widget.get("alerts", []))
+            if tire_alert and not active_alert:
+                active_alert = {**tire_alert, "tire": position, "tireLabel": TIRE_LABELS[position]}
+            latest_timestamp = max(filter(None, [latest_timestamp, updated_at]), default=None)
+            tire_values[position] = {
+                "position": position,
+                "label": TIRE_LABELS[position],
+                "value": value,
+                "formatted": f"{display.get('prefix', '')}{value:.{decimals}f}{suffix}",
+                "updatedAt": updated_at,
+                "alert": tire_alert,
+            }
+
+        average_value = sum(entry["value"] for entry in tire_values.values()) / max(1, len(tire_values))
+        return {
+            "widgetId": widget.get("id"),
+            "value": average_value,
+            "formatted": f"{display.get('prefix', '')}{average_value:.{decimals}f}{suffix}",
+            "updatedAt": latest_timestamp,
+            "alert": active_alert,
+            "summary": {
+                "average": average_value,
+                "hottest": max((entry["value"] for entry in tire_values.values()), default=float(fallback)),
+            },
+            "tires": tire_values,
         }
 
 
@@ -348,6 +459,11 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
         normalized_widget["z"] = int(normalized_widget.get("z", index))
         normalized_widget["id"] = str(normalized_widget.get("id") or f"widget-{index}")
         normalized_widget["name"] = str(normalized_widget.get("name") or f"Widget {index}")
+        if normalized_widget.get("kind") == "tire":
+            normalized_widget["source"]["tires"] = deep_merge(
+                DEFAULT_TIRE_SOURCE,
+                normalized_widget["source"].get("tires", {}),
+            )
         normalized_widget["alerts"] = normalize_alerts(normalized_widget.get("alerts", []), normalized_widget["id"])
         normalized["widgets"].append(normalized_widget)
     if not normalized["widgets"]:

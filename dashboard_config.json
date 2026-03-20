@@ -84,7 +84,7 @@
         "signed": false,
         "scale": 1,
         "offset": -40,
-        "units": "\u00b0C",
+        "units": "°C",
         "samplePeriodMs": 100,
         "fallback": 0,
         "valueMap": {}
@@ -114,6 +114,72 @@
           "threshold": 110,
           "color": "#f97316",
           "message": "COOLANT HOT"
+        }
+      ]
+    },
+    {
+      "id": "widget-tires",
+      "name": "Tire Temps",
+      "kind": "tire",
+      "x": 664,
+      "y": 48,
+      "w": 320,
+      "h": 320,
+      "z": 3,
+      "source": {
+        "canId": "0x110",
+        "startByte": 0,
+        "byteLength": 1,
+        "endian": "little",
+        "signed": false,
+        "scale": 1,
+        "offset": 0,
+        "units": "°C",
+        "samplePeriodMs": 100,
+        "fallback": 0,
+        "valueMap": {},
+        "tires": {
+          "lf": {
+            "canId": "0x110"
+          },
+          "rf": {
+            "canId": "0x111"
+          },
+          "rr": {
+            "canId": "0x112"
+          },
+          "lr": {
+            "canId": "0x113"
+          }
+        }
+      },
+      "display": {
+        "label": "Tires",
+        "decimalPlaces": 0,
+        "prefix": "",
+        "suffix": "",
+        "min": 0,
+        "max": 140,
+        "backgroundColor": "rgba(15,23,42,0.88)",
+        "textColor": "#f8fafc",
+        "accentColor": "#f97316",
+        "borderColor": "#fb923c",
+        "borderWidth": 2,
+        "borderRadius": 28,
+        "backgroundImage": "",
+        "imageOpacity": 1,
+        "showLabel": true,
+        "showValue": false
+      },
+      "alerts": [
+        {
+          "id": "alert-hot-tire",
+          "name": "Tire Temp",
+          "operator": "greater_or_equal",
+          "threshold": 105,
+          "color": "#ef4444",
+          "message": "TIRE HOT",
+          "effect": "widget_only"
         }
       ]
     }

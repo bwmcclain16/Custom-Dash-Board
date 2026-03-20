@@ -45,6 +45,14 @@ const els = {
   screenAlertMessage: document.getElementById('screen-alert-message'),
 };
 
+const TIRE_POSITIONS = ['lf', 'rf', 'rr', 'lr'];
+const TIRE_LABELS = {
+  lf: 'LF',
+  rf: 'RF',
+  rr: 'RR',
+  lr: 'LR',
+};
+
 async function request(url, options = {}) {
   const response = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
@@ -155,9 +163,30 @@ function renderWidgetList() {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = `widget-row ${widget.id === state.selectedWidgetId ? 'active' : ''}`;
-    row.innerHTML = `<strong>${widget.name}</strong><div class="tiny">${widget.source.canId} · ${widget.kind}</div>`;
+    const sourceSummary = widget.kind === 'tire'
+      ? TIRE_POSITIONS.map((position) => `${TIRE_LABELS[position]}:${widget.source?.tires?.[position]?.canId || '—'}`).join(' · ')
+      : widget.source.canId;
+    row.innerHTML = `<strong>${widget.name}</strong><div class="tiny">${sourceSummary} · ${widget.kind}</div>`;
     row.addEventListener('click', () => selectWidget(widget.id));
     els.widgetList.appendChild(row);
+  });
+}
+
+function ensureTireSources(widget) {
+  widget.source ||= {};
+  widget.source.tires ||= {};
+  TIRE_POSITIONS.forEach((position, index) => {
+    widget.source.tires[position] ||= { canId: `0x11${index}` };
+  });
+}
+
+function updateKindVisibility(kind) {
+  els.widgetForm.querySelectorAll('[data-kind-only]').forEach((node) => {
+    node.classList.toggle('hidden', node.dataset.kindOnly !== kind);
+  });
+  els.widgetForm.querySelectorAll('[data-kind-hide]').forEach((node) => {
+    const hiddenKinds = (node.dataset.kindHide || '').split(',').map((value) => value.trim()).filter(Boolean);
+    node.classList.toggle('hidden', hiddenKinds.includes(kind));
   });
 }
 
@@ -238,16 +267,18 @@ function buildWidgetElement(widget, runtimeInfo) {
   const gaugeNeedle = node.querySelector('.widget-gauge-needle');
   const gaugeMarks = node.querySelector('.widget-gauge-marks');
   const statusDot = node.querySelector('.widget-status-dot');
+  const tireGrid = node.querySelector('.widget-tire-grid');
   const alertNode = node.querySelector('.widget-alert');
 
   imageLayer.style.backgroundImage = widget.display.backgroundImage ? `url(${widget.display.backgroundImage})` : 'none';
   imageLayer.style.opacity = `${Number(widget.display.imageOpacity ?? 1)}`;
 
   const layout = getWidgetLayout(widget);
+  const isTireWidget = widget.kind === 'tire';
   title.textContent = widget.display.showLabel ? (widget.display.label || widget.name) : '';
-  value.textContent = widget.display.showValue ? (runtimeInfo?.formatted || '—') : '';
+  value.textContent = widget.display.showValue && !isTireWidget ? (runtimeInfo?.formatted || '—') : '';
   title.classList.toggle('hidden', !widget.display.showLabel);
-  value.classList.toggle('hidden', !widget.display.showValue);
+  value.classList.toggle('hidden', !widget.display.showValue || isTireWidget);
   applyMovableLayout(title, layout.labelX, layout.labelY, layout.labelAlign);
   applyMovableLayout(value, layout.valueX, layout.valueY, layout.valueAlign);
 
@@ -270,13 +301,29 @@ function buildWidgetElement(widget, runtimeInfo) {
   renderGaugeMarks(gaugeMarks, gaugeSettings);
   statusDot.style.opacity = `${0.35 + ratio / 150}`;
 
-  meter.classList.toggle('hidden', (widget.kind === 'gauge') || widget.kind === 'status');
+  meter.classList.toggle('hidden', (widget.kind === 'gauge') || widget.kind === 'status' || isTireWidget);
   gauge.classList.toggle('hidden', !(widget.kind === 'gauge' || widget.kind === 'gauge_value'));
   statusDot.classList.toggle('hidden', widget.kind !== 'status');
+  tireGrid.classList.toggle('hidden', !isTireWidget);
   meter.style.height = widget.kind === 'bar' ? '22px' : '14px';
 
+  if (isTireWidget) {
+    tireGrid.querySelector('.tire-widget-center').textContent = widget.display.label || widget.name || 'Tires';
+    tireGrid.querySelectorAll('.tire-card').forEach((tireNode) => {
+      const position = tireNode.dataset.tirePosition;
+      const tireInfo = runtimeInfo?.tires?.[position];
+      const tireRatio = clamp(((Number(tireInfo?.value ?? widget.source.fallback ?? 0) - min) / Math.max(1, max - min)) * 100, 0, 100);
+      const tireColor = tireInfo?.alert?.color || gaugeColor(widget.display, tireRatio);
+      tireNode.style.color = tireColor;
+      tireNode.querySelector('.tire-card-label').textContent = tireInfo?.label || TIRE_LABELS[position];
+      tireNode.querySelector('.tire-card-value').textContent = tireInfo?.formatted || '—';
+    });
+  }
+
   if (runtimeInfo?.alert) {
-    alertNode.textContent = runtimeInfo.alert.message || runtimeInfo.alert.name || 'Alert';
+    alertNode.textContent = runtimeInfo.alert.tireLabel
+      ? `${runtimeInfo.alert.tireLabel} ${runtimeInfo.alert.message || runtimeInfo.alert.name || 'Alert'}`
+      : (runtimeInfo.alert.message || runtimeInfo.alert.name || 'Alert');
     alertNode.style.background = runtimeInfo.alert.color || '#ef4444';
     alertNode.classList.remove('hidden');
     if (runtimeInfo.alert.effect === 'widget_only') {
@@ -371,8 +418,10 @@ function populateWidgetForm() {
     els.emptyState.classList.remove('hidden');
     return;
   }
+  if (widget.kind === 'tire') ensureTireSources(widget);
   form.classList.remove('hidden');
   els.emptyState.classList.add('hidden');
+  updateKindVisibility(widget.kind);
   els.widgetBgStatus.textContent = widget.display.backgroundImage ? 'Widget background uploaded.' : 'No widget background uploaded.';
   [...form.elements].forEach((field) => {
     if (!field.name) return;
@@ -397,11 +446,17 @@ function createDefaultWidget() {
     source: {
       canId: '0x102', startByte: 0, byteLength: 1, endian: 'little', signed: false,
       scale: 1, offset: 0, units: '', samplePeriodMs: 100, fallback: 0, valueMap: {},
+      tires: {
+        lf: { canId: '0x110' },
+        rf: { canId: '0x111' },
+        rr: { canId: '0x112' },
+        lr: { canId: '0x113' },
+      },
     },
     display: {
       label: `Widget ${nextIndex}`, decimalPlaces: 0, prefix: '', suffix: '', min: 0, max: 100,
       backgroundColor: '#132033', textColor: '#f8fafc', accentColor: '#38bdf8', borderColor: '#38bdf8',
-      borderWidth: 2, borderRadius: 20, backgroundImage: '', showLabel: true, showValue: true,
+      borderWidth: 2, borderRadius: 20, backgroundImage: '', imageOpacity: 1, showLabel: true, showValue: true,
       layout: { labelX: 16, labelY: 16, valueX: 16, valueY: 52, labelAlign: 'left', valueAlign: 'left' },
       gauge: { useGradient: false, gradientStartColor: '#22c55e', gradientMidColor: '#facc15', gradientEndColor: '#ef4444', tickCount: 11, majorTickEvery: 2, startAngle: -120, endAngle: 120 },
     },
@@ -464,8 +519,6 @@ function beginPartDrag(event, widgetId, part) {
   event.stopPropagation();
   selectWidget(widgetId);
   const widget = selectedWidget();
-  imageLayer.style.backgroundImage = widget.display.backgroundImage ? `url(${widget.display.backgroundImage})` : 'none';
-  imageLayer.style.opacity = `${Number(widget.display.imageOpacity ?? 1)}`;
 
   const layout = getWidgetLayout(widget);
   const keyX = part === 'label' ? 'labelX' : 'valueX';
@@ -582,6 +635,17 @@ function wireForm() {
     const currentValue = getPath(widget, field.name);
     const value = coerceFieldValue(field, currentValue);
     setPath(widget, field.name, value);
+    if (field.name === 'kind') {
+      if (value === 'tire') {
+        ensureTireSources(widget);
+        widget.w = Math.max(widget.w || 0, 300);
+        widget.h = Math.max(widget.h || 0, 300);
+        widget.display.label ||= 'Tires';
+        widget.display.max = Number(widget.display.max ?? 140) || 140;
+        widget.source.units ||= '°C';
+      }
+      updateKindVisibility(value);
+    }
     if (field.name === 'name' && !widget.display.label) widget.display.label = value;
     markDirty('widget', true);
     renderWidgetList();
