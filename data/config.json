@@ -1,0 +1,119 @@
+{
+  "settings": {
+    "dashboardName": "Motorsport Dashboard",
+    "theme": {
+      "backgroundColor": "#0b1020",
+      "gridColor": "rgba(255,255,255,0.08)",
+      "cardColor": "rgba(15,23,42,0.88)",
+      "textColor": "#f8fafc",
+      "accentColor": "#38bdf8",
+      "backgroundImage": "",
+      "showGrid": true
+    },
+    "can": {
+      "mode": "demo",
+      "channel": "can0",
+      "bustype": "socketcan",
+      "bitrate": 500000
+    },
+    "refreshMs": 120,
+    "snapToGrid": true,
+    "gridSize": 20
+  },
+  "widgets": [
+    {
+      "id": "widget-rpm",
+      "type": "gauge",
+      "title": "Engine RPM",
+      "unit": "rpm",
+      "position": {
+        "x": 40,
+        "y": 40,
+        "w": 240,
+        "h": 170
+      },
+      "style": {
+        "backgroundColor": "rgba(15,23,42,0.92)",
+        "textColor": "#f8fafc",
+        "valueColor": "#38bdf8",
+        "borderColor": "#38bdf8",
+        "borderWidth": 2,
+        "borderRadius": 18,
+        "backgroundImage": "",
+        "fontFamily": "Inter, sans-serif"
+      },
+      "data": {
+        "canId": "0x101",
+        "startByte": 0,
+        "length": 2,
+        "endianness": "big",
+        "signed": false,
+        "scale": 1,
+        "offset": 0,
+        "precision": 0,
+        "min": 0,
+        "max": 10000,
+        "demoMin": 1200,
+        "demoMax": 9200
+      },
+      "alerts": [
+        {
+          "id": "rpm-redline",
+          "label": "Redline",
+          "operator": ">=",
+          "value": 8500,
+          "severity": "critical",
+          "message": "Shift now",
+          "color": "#ef4444"
+        }
+      ]
+    },
+    {
+      "id": "widget-temp",
+      "type": "numeric",
+      "title": "Coolant Temp",
+      "unit": "\u00b0C",
+      "position": {
+        "x": 320,
+        "y": 60,
+        "w": 210,
+        "h": 130
+      },
+      "style": {
+        "backgroundColor": "rgba(30,41,59,0.92)",
+        "textColor": "#e2e8f0",
+        "valueColor": "#f97316",
+        "borderColor": "#f97316",
+        "borderWidth": 2,
+        "borderRadius": 18,
+        "backgroundImage": "",
+        "fontFamily": "Inter, sans-serif"
+      },
+      "data": {
+        "canId": "0x102",
+        "startByte": 0,
+        "length": 1,
+        "endianness": "big",
+        "signed": false,
+        "scale": 1,
+        "offset": 0,
+        "precision": 0,
+        "min": 0,
+        "max": 140,
+        "demoMin": 70,
+        "demoMax": 122
+      },
+      "alerts": [
+        {
+          "id": "temp-high",
+          "label": "High Temp",
+          "operator": ">=",
+          "value": 110,
+          "severity": "warning",
+          "message": "Cooling check",
+          "color": "#f59e0b"
+        }
+      ]
+    }
+  ]
+}
