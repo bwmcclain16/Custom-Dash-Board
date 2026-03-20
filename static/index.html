@@ -67,7 +67,11 @@
         <label>Width <input id="dashboard-width" type="number"></label>
         <label>Height <input id="dashboard-height" type="number"></label>
         <label>Background color <input id="dashboard-bg" type="color"></label>
-        <label>Background image URL <input id="dashboard-bg-image" placeholder="file:///... or https://..."></label>
+        <div class="upload-row">
+          <button id="dashboard-bg-upload-button" type="button" class="secondary">Upload dashboard background</button>
+          <input id="dashboard-bg-upload" type="file" accept="image/*" class="hidden">
+          <div id="dashboard-bg-status" class="tiny">No background image uploaded.</div>
+        </div>
         <label>Grid size <input id="dashboard-grid" type="number" min="8" step="4"></label>
         <div id="dashboard-save-status" class="tiny">Dashboard changes are live in the editor. Use “Save dashboard” to write them to disk.</div>
       </section>
@@ -85,6 +89,7 @@
             <select name="kind">
               <option value="value">Value</option>
               <option value="gauge">Gauge</option>
+              <option value="gauge_value">Gauge + value</option>
               <option value="bar">Bar</option>
               <option value="status">Status</option>
             </select>
@@ -129,7 +134,11 @@
           <label>Text color <input name="display.textColor" type="color"></label>
           <label>Accent color <input name="display.accentColor" type="color"></label>
           <label>Border color <input name="display.borderColor" type="color"></label>
-          <label>Background image URL <input name="display.backgroundImage"></label>
+          <div class="upload-row">
+            <button id="widget-bg-upload-button" type="button" class="secondary">Upload widget background</button>
+            <input id="widget-bg-upload" type="file" accept="image/*" class="hidden">
+            <div id="widget-bg-status" class="tiny">No widget background uploaded.</div>
+          </div>
           <label class="inline-toggle"><input name="display.showLabel" type="checkbox"> Show label</label>
           <label class="inline-toggle"><input name="display.showValue" type="checkbox"> Show value</label>
 

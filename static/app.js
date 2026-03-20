@@ -16,7 +16,9 @@ const els = {
   dashboardWidth: document.getElementById('dashboard-width'),
   dashboardHeight: document.getElementById('dashboard-height'),
   dashboardBg: document.getElementById('dashboard-bg'),
-  dashboardBgImage: document.getElementById('dashboard-bg-image'),
+  dashboardBgUploadButton: document.getElementById('dashboard-bg-upload-button'),
+  dashboardBgUpload: document.getElementById('dashboard-bg-upload'),
+  dashboardBgStatus: document.getElementById('dashboard-bg-status'),
   dashboardGrid: document.getElementById('dashboard-grid'),
   toggleGrid: document.getElementById('toggle-grid'),
   refreshRate: document.getElementById('refresh-rate'),
@@ -33,6 +35,9 @@ const els = {
   widgetForm: document.getElementById('widget-form'),
   emptyState: document.getElementById('empty-state'),
   widgetTemplate: document.getElementById('widget-template'),
+  widgetBgUploadButton: document.getElementById('widget-bg-upload-button'),
+  widgetBgUpload: document.getElementById('widget-bg-upload'),
+  widgetBgStatus: document.getElementById('widget-bg-status'),
   dashboardFullscreenToggle: document.getElementById('dashboard-fullscreen-toggle'),
   dashboardSaveStatus: document.getElementById('dashboard-save-status'),
   widgetSaveStatus: document.getElementById('widget-save-status'),
@@ -67,6 +72,15 @@ function ensureHexColor(value, fallback = '#0f172a') {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Unable to read image file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function hexToRgb(hex) {
@@ -130,7 +144,7 @@ function updateDashboardControls() {
   els.dashboardWidth.value = dashboard.width;
   els.dashboardHeight.value = dashboard.height;
   els.dashboardBg.value = ensureHexColor(dashboard.backgroundColor, '#08111f');
-  els.dashboardBgImage.value = dashboard.backgroundImage || '';
+  els.dashboardBgStatus.textContent = dashboard.backgroundImage ? 'Dashboard background uploaded.' : 'No background image uploaded.';
   els.dashboardGrid.value = dashboard.gridSize;
   els.toggleGrid.checked = dashboard.showGrid;
 }
@@ -247,13 +261,13 @@ function buildWidgetElement(widget, runtimeInfo) {
   const gaugeSettings = getGaugeSettings(widget);
   const span = gaugeSettings.endAngle - gaugeSettings.startAngle;
   const needleAngle = gaugeSettings.startAngle + span * (ratio / 100);
-  gaugeRing.style.background = `conic-gradient(from ${gaugeSettings.startAngle + 90}deg, ${color} 0deg ${Math.max(0, span * (ratio / 100))}deg, rgba(255,255,255,0.08) ${Math.max(0, span * (ratio / 100))}deg ${Math.max(0, span)}deg, transparent ${Math.max(0, span)}deg 360deg)`;
+  gaugeRing.style.background = `conic-gradient(from ${gaugeSettings.startAngle}deg, ${color} 0deg ${Math.max(0, span * (ratio / 100))}deg, rgba(255,255,255,0.08) ${Math.max(0, span * (ratio / 100))}deg ${Math.max(0, span)}deg, transparent ${Math.max(0, span)}deg 360deg)`;
   gaugeNeedle.style.transform = `rotate(${needleAngle}deg)`;
   renderGaugeMarks(gaugeMarks, gaugeSettings);
   statusDot.style.opacity = `${0.35 + ratio / 150}`;
 
-  meter.classList.toggle('hidden', widget.kind === 'gauge' || widget.kind === 'status');
-  gauge.classList.toggle('hidden', widget.kind !== 'gauge');
+  meter.classList.toggle('hidden', (widget.kind === 'gauge') || widget.kind === 'status');
+  gauge.classList.toggle('hidden', !(widget.kind === 'gauge' || widget.kind === 'gauge_value'));
   statusDot.classList.toggle('hidden', widget.kind !== 'status');
   meter.style.height = widget.kind === 'bar' ? '22px' : '14px';
 
@@ -355,6 +369,7 @@ function populateWidgetForm() {
   }
   form.classList.remove('hidden');
   els.emptyState.classList.add('hidden');
+  els.widgetBgStatus.textContent = widget.display.backgroundImage ? 'Widget background uploaded.' : 'No widget background uploaded.';
   [...form.elements].forEach((field) => {
     if (!field.name) return;
     const value = getPath(widget, field.name);
@@ -574,7 +589,6 @@ function wireForm() {
     ['dashboard-width', 'width', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
     ['dashboard-height', 'height', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
     ['dashboard-bg', 'backgroundColor'],
-    ['dashboard-bg-image', 'backgroundImage'],
     ['dashboard-grid', 'gridSize', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
   ].forEach(([id, key, parser]) => {
     document.getElementById(id).addEventListener('input', (event) => {
@@ -589,6 +603,29 @@ function wireForm() {
     state.config.dashboard.showGrid = event.target.checked;
     markDirty('dashboard', true);
     renderCanvas();
+  });
+
+  els.dashboardBgUploadButton.addEventListener('click', () => els.dashboardBgUpload.click());
+  els.dashboardBgUpload.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    state.config.dashboard.backgroundImage = await readFileAsDataUrl(file);
+    els.dashboardBgStatus.textContent = `Dashboard background: ${file.name}`;
+    markDirty('dashboard', true);
+    renderCanvas();
+    event.target.value = '';
+  });
+
+  els.widgetBgUploadButton.addEventListener('click', () => els.widgetBgUpload.click());
+  els.widgetBgUpload.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    const widget = selectedWidget();
+    if (!file || !widget) return;
+    widget.display.backgroundImage = await readFileAsDataUrl(file);
+    els.widgetBgStatus.textContent = `Widget background: ${file.name}`;
+    markDirty('widget', true);
+    renderCanvas();
+    event.target.value = '';
   });
 }
 
