@@ -14,6 +14,8 @@
       <div class="stack">
         <button id="add-widget">+ Add widget</button>
         <button id="save-config" class="secondary">Save dashboard</button>
+        <button id="import-config-button" class="secondary">Import configuration</button>
+        <input id="import-config-input" type="file" accept="application/json" class="hidden">
         <button id="duplicate-widget" class="secondary">Duplicate widget</button>
         <button id="delete-widget" class="danger">Delete selected</button>
       </div>
@@ -44,6 +46,7 @@
           <span class="muted">Drag widgets around. Pull the corner handle to resize.</span>
         </div>
         <div class="toolbar-actions">
+          <button id="fullscreen-toggle" class="secondary">Fullscreen</button>
           <label class="inline-toggle"><input type="checkbox" id="toggle-grid" checked> Show grid</label>
           <label>Refresh <input id="refresh-rate" type="number" min="50" step="50" value="250"> ms</label>
         </div>
@@ -60,11 +63,16 @@
         <label>Background color <input id="dashboard-bg" type="color"></label>
         <label>Background image URL <input id="dashboard-bg-image" placeholder="file:///... or https://..."></label>
         <label>Grid size <input id="dashboard-grid" type="number" min="8" step="4"></label>
+        <div id="dashboard-save-status" class="tiny">Dashboard changes are live in the editor. Use “Save dashboard” to write them to disk.</div>
       </section>
 
       <section class="panel-section">
-        <h2>Widget Editor</h2>
+        <div class="section-header">
+          <h2>Widget Editor</h2>
+          <button id="save-widget" type="button" class="secondary">Save widget</button>
+        </div>
         <div id="empty-state" class="empty-state">Select a widget to customize every detail.</div>
+        <div id="widget-save-status" class="tiny hidden">Widget changes are live in the preview. Use “Save widget” to write them to disk.</div>
         <form id="widget-form" class="widget-form hidden">
           <label>Name <input name="name"></label>
           <label>Kind
@@ -121,14 +129,14 @@
 
           <h3>Alert</h3>
           <label>Alert name <input name="alerts.0.name"></label>
-          <label>Operator
+          <label>Raise alert when value is
             <select name="alerts.0.operator">
-              <option value=">=">&gt;=</option>
-              <option value=">">&gt;</option>
-              <option value="<=">&lt;=</option>
-              <option value="<">&lt;</option>
-              <option value="==">==</option>
-              <option value="!=">!=</option>
+              <option value="greater_or_equal">At or above</option>
+              <option value="greater_than">Above</option>
+              <option value="less_or_equal">At or below</option>
+              <option value="less_than">Below</option>
+              <option value="equal_to">Exactly equal to</option>
+              <option value="not_equal_to">Not equal to</option>
             </select>
           </label>
           <div class="two-col">

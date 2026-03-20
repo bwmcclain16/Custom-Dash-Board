@@ -14,13 +14,13 @@ This project uses Python plus a built-in web server and a vanilla HTML/CSS/JS fr
 
 ## Features
 
-- **Dashboard editor** with drag-and-drop placement and resize handles.
-- **No-code widget setup** through a right-side properties panel.
+- **Dashboard editor** with drag-and-drop placement, resize handles, and fullscreen mode.
+- **No-code widget setup** through a right-side properties panel with per-widget save.
 - **CAN-driven widgets** configured by CAN ID, start byte, byte length, scaling, offset, endianness, signedness, units, and fallback values.
 - **Per-widget styling** including label, value formatting, colors, borders, radius, and background image.
-- **Per-widget alerts** with thresholds, operators, colors, and custom warning text.
+- **Per-widget alerts** with readable condition phrases, thresholds, colors, and custom warning text.
 - **Built-in CAN simulator** so you can validate layouts before wiring the real bus.
-- **Persistent configuration** saved to `dashboard_config.json`.
+- **Persistent configuration** saved to `dashboard_config.json`, plus JSON config import support.
 
 ## Quick start
 

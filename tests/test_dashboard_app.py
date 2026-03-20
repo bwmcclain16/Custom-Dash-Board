@@ -1,6 +1,6 @@
 import unittest
 
-from src.dashboard_app import decode_signal, evaluate_alerts, parse_can_id
+from src.dashboard_app import decode_signal, evaluate_alerts, normalize_config, normalize_operator, parse_can_id
 
 
 class DashboardAppTests(unittest.TestCase):
@@ -30,13 +30,21 @@ class DashboardAppTests(unittest.TestCase):
         }
         self.assertEqual(decode_signal([0xFF, 0x9C], signal), -100)
 
-    def test_evaluate_alerts_returns_first_matching_alert(self):
+    def test_evaluate_alerts_supports_word_operators_and_legacy_symbols(self):
         alerts = [
-            {"name": "Warm", "operator": ">=", "threshold": 90, "color": "orange"},
-            {"name": "Hot", "operator": ">=", "threshold": 110, "color": "red"},
+            {"name": "Warm", "operator": "greater_or_equal", "threshold": 90, "color": "orange"},
+            {"name": "Legacy", "operator": ">", "threshold": 110, "color": "red"},
         ]
         self.assertEqual(evaluate_alerts(95, alerts)["name"], "Warm")
+        self.assertEqual(normalize_operator(">="), "greater_or_equal")
         self.assertIsNone(evaluate_alerts(70, alerts))
+
+    def test_normalize_config_fills_missing_defaults(self):
+        config = normalize_config({"widgets": [{"name": "Oil Temp", "alerts": [{"threshold": 125}]}]})
+        widget = config["widgets"][0]
+        self.assertEqual(widget["display"]["borderWidth"], 2)
+        self.assertEqual(widget["alerts"][0]["operator"], "greater_or_equal")
+        self.assertEqual(config["dashboard"]["width"], 1280)
 
 
 if __name__ == "__main__":

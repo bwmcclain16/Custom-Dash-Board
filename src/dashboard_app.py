@@ -6,12 +6,13 @@ import math
 import mimetypes
 import threading
 import time
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 try:
     import can  # type: ignore
@@ -22,25 +23,83 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 CONFIG_PATH = BASE_DIR / "dashboard_config.json"
 
+DEFAULT_DASHBOARD = {
+    "name": "Motorsport Command Center",
+    "width": 1280,
+    "height": 720,
+    "backgroundColor": "#08111f",
+    "backgroundImage": "",
+    "gridSize": 16,
+    "showGrid": True,
+    "fontFamily": "Inter, Arial, sans-serif",
+}
+
+DEFAULT_CAN = {
+    "interface": "virtual",
+    "channel": "motorsport-dashboard",
+    "bitrate": 500000,
+    "dbc": "",
+    "pollIntervalMs": 100,
+}
+
+DEFAULT_SOURCE = {
+    "canId": "0x100",
+    "startByte": 0,
+    "byteLength": 1,
+    "endian": "little",
+    "signed": False,
+    "scale": 1,
+    "offset": 0,
+    "units": "",
+    "samplePeriodMs": 100,
+    "fallback": 0,
+    "valueMap": {},
+}
+
+DEFAULT_DISPLAY = {
+    "label": "Widget",
+    "decimalPlaces": 0,
+    "prefix": "",
+    "suffix": "",
+    "min": 0,
+    "max": 100,
+    "backgroundColor": "#132033",
+    "textColor": "#f8fafc",
+    "accentColor": "#38bdf8",
+    "borderColor": "#38bdf8",
+    "borderWidth": 2,
+    "borderRadius": 20,
+    "backgroundImage": "",
+    "showLabel": True,
+    "showValue": True,
+}
+
+DEFAULT_ALERT = {
+    "id": "alert-default",
+    "name": "Warning",
+    "operator": "greater_or_equal",
+    "threshold": 90,
+    "color": "#ef4444",
+    "message": "WARNING",
+}
+
+DEFAULT_WIDGET = {
+    "id": "widget-default",
+    "name": "Widget",
+    "kind": "value",
+    "x": 80,
+    "y": 80,
+    "w": 220,
+    "h": 160,
+    "z": 1,
+    "source": DEFAULT_SOURCE,
+    "display": DEFAULT_DISPLAY,
+    "alerts": [DEFAULT_ALERT],
+}
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "dashboard": {
-        "name": "Motorsport Command Center",
-        "width": 1280,
-        "height": 720,
-        "backgroundColor": "#08111f",
-        "backgroundImage": "",
-        "gridSize": 16,
-        "showGrid": True,
-        "fontFamily": "Inter, Arial, sans-serif",
-    },
-    "can": {
-        "interface": "virtual",
-        "channel": "motorsport-dashboard",
-        "bitrate": 500000,
-        "dbc": "",
-        "pollIntervalMs": 100,
-    },
+    "dashboard": DEFAULT_DASHBOARD,
+    "can": DEFAULT_CAN,
     "widgets": [
         {
             "id": "widget-rpm",
@@ -52,40 +111,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "h": 220,
             "z": 1,
             "source": {
+                **DEFAULT_SOURCE,
                 "canId": "0x100",
-                "startByte": 0,
                 "byteLength": 2,
-                "endian": "little",
-                "signed": False,
-                "scale": 1,
-                "offset": 0,
                 "units": "rpm",
                 "samplePeriodMs": 50,
-                "fallback": 0,
-                "valueMap": {},
             },
             "display": {
+                **DEFAULT_DISPLAY,
                 "label": "RPM",
-                "decimalPlaces": 0,
-                "prefix": "",
-                "suffix": "",
-                "min": 0,
                 "max": 12000,
                 "backgroundColor": "rgba(4,16,30,0.84)",
-                "textColor": "#f8fafc",
-                "accentColor": "#38bdf8",
                 "borderColor": "#60a5fa",
-                "borderWidth": 2,
                 "borderRadius": 24,
-                "backgroundImage": "",
-                "showLabel": True,
-                "showValue": True,
             },
             "alerts": [
                 {
                     "id": "alert-high-rpm",
                     "name": "Over-rev",
-                    "operator": ">=",
+                    "operator": "greater_or_equal",
                     "threshold": 10500,
                     "color": "#ef4444",
                     "message": "SHIFT NOW",
@@ -102,40 +146,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "h": 180,
             "z": 2,
             "source": {
+                **DEFAULT_SOURCE,
                 "canId": "0x101",
                 "startByte": 2,
-                "byteLength": 1,
-                "endian": "little",
-                "signed": False,
-                "scale": 1,
-                "offset": -40,
                 "units": "°C",
-                "samplePeriodMs": 100,
-                "fallback": 0,
-                "valueMap": {},
+                "offset": -40,
             },
             "display": {
+                **DEFAULT_DISPLAY,
                 "label": "Coolant",
-                "decimalPlaces": 0,
-                "prefix": "",
-                "suffix": "",
-                "min": 0,
                 "max": 140,
                 "backgroundColor": "rgba(15,23,42,0.86)",
-                "textColor": "#e2e8f0",
                 "accentColor": "#22c55e",
                 "borderColor": "#22c55e",
-                "borderWidth": 2,
-                "borderRadius": 20,
-                "backgroundImage": "",
-                "showLabel": True,
-                "showValue": True,
             },
             "alerts": [
                 {
                     "id": "alert-high-temp",
                     "name": "Temp Warning",
-                    "operator": ">=",
+                    "operator": "greater_or_equal",
                     "threshold": 110,
                     "color": "#f97316",
                     "message": "COOLANT HOT",
@@ -161,9 +190,10 @@ class ConfigStore:
 
     def _load(self) -> dict[str, Any]:
         if self.path.exists():
-            return json.loads(self.path.read_text())
-        self.path.write_text(json.dumps(DEFAULT_CONFIG, indent=2))
-        return json.loads(json.dumps(DEFAULT_CONFIG))
+            return normalize_config(json.loads(self.path.read_text()))
+        config = normalize_config(deepcopy(DEFAULT_CONFIG))
+        self.path.write_text(json.dumps(config, indent=2))
+        return config
 
     def get(self) -> dict[str, Any]:
         with self.lock:
@@ -171,8 +201,8 @@ class ConfigStore:
 
     def save(self, new_config: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
-            self.config = new_config
-            self.path.write_text(json.dumps(new_config, indent=2))
+            self.config = normalize_config(new_config)
+            self.path.write_text(json.dumps(self.config, indent=2))
             return json.loads(json.dumps(self.config))
 
 
@@ -242,10 +272,7 @@ class CanMonitor:
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
-            return {
-                f"0x{frame_id:X}": asdict(record)
-                for frame_id, record in sorted(self.frames.items())
-            }
+            return {f"0x{frame_id:X}": asdict(record) for frame_id, record in sorted(self.frames.items())}
 
     def decode_widget(self, widget: dict[str, Any]) -> dict[str, Any]:
         source = widget.get("source", {})
@@ -271,6 +298,65 @@ class CanMonitor:
             "updatedAt": updated_at,
             "alert": alert,
         }
+
+
+def deep_merge(defaults: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = deepcopy(defaults)
+    for key, value in incoming.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = deepcopy(value)
+    return merged
+
+
+def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = {
+        "dashboard": deep_merge(DEFAULT_DASHBOARD, config.get("dashboard", {})),
+        "can": deep_merge(DEFAULT_CAN, config.get("can", {})),
+        "widgets": [],
+    }
+    widgets = config.get("widgets", []) or []
+    for index, widget in enumerate(widgets, start=1):
+        normalized_widget = deep_merge(DEFAULT_WIDGET, widget)
+        normalized_widget["z"] = int(normalized_widget.get("z", index))
+        normalized_widget["id"] = str(normalized_widget.get("id") or f"widget-{index}")
+        normalized_widget["name"] = str(normalized_widget.get("name") or f"Widget {index}")
+        normalized_widget["alerts"] = normalize_alerts(normalized_widget.get("alerts", []), normalized_widget["id"])
+        normalized["widgets"].append(normalized_widget)
+    if not normalized["widgets"]:
+        normalized["widgets"] = deepcopy(DEFAULT_CONFIG["widgets"])
+    return normalized
+
+
+def normalize_alerts(alerts: list[dict[str, Any]], widget_id: str) -> list[dict[str, Any]]:
+    normalized_alerts: list[dict[str, Any]] = []
+    for index, alert in enumerate(alerts or [DEFAULT_ALERT], start=1):
+        normalized_alert = deep_merge(DEFAULT_ALERT, alert)
+        normalized_alert["id"] = str(normalized_alert.get("id") or f"{widget_id}-alert-{index}")
+        normalized_alert["operator"] = normalize_operator(normalized_alert.get("operator", DEFAULT_ALERT["operator"]))
+        normalized_alerts.append(normalized_alert)
+    return normalized_alerts or [deepcopy(DEFAULT_ALERT)]
+
+
+OPERATOR_ALIASES = {
+    ">": "greater_than",
+    ">=": "greater_or_equal",
+    "<": "less_than",
+    "<=": "less_or_equal",
+    "==": "equal_to",
+    "!=": "not_equal_to",
+    "greater_than": "greater_than",
+    "greater_or_equal": "greater_or_equal",
+    "less_than": "less_than",
+    "less_or_equal": "less_or_equal",
+    "equal_to": "equal_to",
+    "not_equal_to": "not_equal_to",
+}
+
+
+def normalize_operator(value: str) -> str:
+    return OPERATOR_ALIASES.get(str(value), "greater_or_equal")
 
 
 def parse_can_id(value: str | int) -> int:
@@ -301,23 +387,25 @@ def decode_signal(data: list[int], source: dict[str, Any]) -> float:
 
 def evaluate_alerts(value: float, alerts: list[dict[str, Any]]) -> dict[str, Any] | None:
     operations = {
-        ">": lambda a, b: a > b,
-        ">=": lambda a, b: a >= b,
-        "<": lambda a, b: a < b,
-        "<=": lambda a, b: a <= b,
-        "==": lambda a, b: a == b,
-        "!=": lambda a, b: a != b,
+        "greater_than": lambda a, b: a > b,
+        "greater_or_equal": lambda a, b: a >= b,
+        "less_than": lambda a, b: a < b,
+        "less_or_equal": lambda a, b: a <= b,
+        "equal_to": lambda a, b: a == b,
+        "not_equal_to": lambda a, b: a != b,
     }
     for alert in alerts:
-        operator = alert.get("operator", ">=")
+        operator = normalize_operator(alert.get("operator", DEFAULT_ALERT["operator"]))
         threshold = float(alert.get("threshold", 0))
-        if operations.get(operator, operations[">="])(value, threshold):
-            return alert
+        if operations[operator](value, threshold):
+            alert_copy = deepcopy(alert)
+            alert_copy["operator"] = operator
+            return alert_copy
     return None
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
-    server_version = "MotorsportDashboard/1.0"
+    server_version = "MotorsportDashboard/1.1"
 
     @property
     def app(self) -> "DashboardServer":

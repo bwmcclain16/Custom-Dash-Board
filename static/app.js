@@ -4,6 +4,7 @@ const state = {
   selectedWidgetId: null,
   refreshTimer: null,
   dragging: null,
+  dirty: { dashboard: false, widget: false },
 };
 
 const els = {
@@ -21,6 +22,9 @@ const els = {
   refreshRate: document.getElementById('refresh-rate'),
   addWidget: document.getElementById('add-widget'),
   saveConfig: document.getElementById('save-config'),
+  saveWidget: document.getElementById('save-widget'),
+  importConfigButton: document.getElementById('import-config-button'),
+  importConfigInput: document.getElementById('import-config-input'),
   duplicateWidget: document.getElementById('duplicate-widget'),
   deleteWidget: document.getElementById('delete-widget'),
   injectFrame: document.getElementById('inject-frame'),
@@ -29,6 +33,9 @@ const els = {
   widgetForm: document.getElementById('widget-form'),
   emptyState: document.getElementById('empty-state'),
   widgetTemplate: document.getElementById('widget-template'),
+  fullscreenToggle: document.getElementById('fullscreen-toggle'),
+  dashboardSaveStatus: document.getElementById('dashboard-save-status'),
+  widgetSaveStatus: document.getElementById('widget-save-status'),
 };
 
 async function request(url, options = {}) {
@@ -54,6 +61,24 @@ function ensureHexColor(value, fallback = '#0f172a') {
   const rgba = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
   if (!rgba) return fallback;
   return '#' + rgba.slice(1, 4).map((part) => Number(part).toString(16).padStart(2, '0')).join('');
+}
+
+function updateStatusText() {
+  els.dashboardSaveStatus.textContent = state.dirty.dashboard
+    ? 'Dashboard changes are live in the editor. Click “Save dashboard” to write them to disk.'
+    : 'Dashboard changes are saved.';
+  const hasWidget = Boolean(selectedWidget());
+  els.widgetSaveStatus.classList.toggle('hidden', !hasWidget);
+  if (hasWidget) {
+    els.widgetSaveStatus.textContent = state.dirty.widget
+      ? 'Widget changes are live in the preview. Click “Save widget” to write them to disk.'
+      : 'Widget changes are saved.';
+  }
+}
+
+function markDirty(scope, dirty = true) {
+  state.dirty[scope] = dirty;
+  updateStatusText();
 }
 
 function updateDashboardControls() {
@@ -141,6 +166,7 @@ function selectWidget(widgetId) {
   renderWidgetList();
   renderCanvas();
   populateWidgetForm();
+  updateStatusText();
 }
 
 function setPath(object, path, value) {
@@ -149,20 +175,30 @@ function setPath(object, path, value) {
   keys.forEach((key, index) => {
     const isLast = index === keys.length - 1;
     const nextKey = keys[index + 1];
+    const normalizedKey = Array.isArray(current) ? Number(key) : key;
     if (isLast) {
-      current[key] = value;
+      current[normalizedKey] = value;
       return;
     }
-    if (!(key in current)) current[key] = /^\d+$/.test(nextKey) ? [] : {};
-    current = current[key];
-    if (Array.isArray(current) && current.length <= Number(nextKey)) {
-      current[Number(nextKey)] = {};
-    }
+    if (current[normalizedKey] === undefined) current[normalizedKey] = /^\d+$/.test(nextKey) ? [] : {};
+    current = current[normalizedKey];
   });
 }
 
 function getPath(object, path) {
-  return path.split('.').reduce((acc, key) => acc?.[key], object);
+  return path.split('.').reduce((acc, key) => {
+    if (acc === undefined || acc === null) return undefined;
+    return Array.isArray(acc) ? acc[Number(key)] : acc[key];
+  }, object);
+}
+
+function coerceFieldValue(field, currentValue) {
+  if (field.type === 'checkbox') return field.checked;
+  if (field.type === 'number') {
+    if (field.value === '' || Number.isNaN(field.valueAsNumber)) return currentValue ?? 0;
+    return field.valueAsNumber;
+  }
+  return field.value;
 }
 
 function populateWidgetForm() {
@@ -178,19 +214,15 @@ function populateWidgetForm() {
   [...form.elements].forEach((field) => {
     if (!field.name) return;
     const value = getPath(widget, field.name);
-    if (field.type === 'checkbox') {
-      field.checked = Boolean(value);
-    } else if (field.type === 'color') {
-      field.value = ensureHexColor(value, '#0f172a');
-    } else {
-      field.value = value ?? '';
-    }
+    if (field.type === 'checkbox') field.checked = Boolean(value);
+    else if (field.type === 'color') field.value = ensureHexColor(value, '#0f172a');
+    else field.value = value ?? '';
   });
 }
 
-function addWidget() {
+function createDefaultWidget() {
   const nextIndex = state.config.widgets.length + 1;
-  const widget = {
+  return {
     id: `widget-${Date.now()}`,
     name: `Widget ${nextIndex}`,
     kind: 'value',
@@ -208,9 +240,15 @@ function addWidget() {
       backgroundColor: '#132033', textColor: '#f8fafc', accentColor: '#38bdf8', borderColor: '#38bdf8',
       borderWidth: 2, borderRadius: 20, backgroundImage: '', showLabel: true, showValue: true,
     },
-    alerts: [{ id: `alert-${Date.now()}`, name: 'Warning', operator: '>=', threshold: 90, color: '#ef4444', message: 'WARNING' }],
+    alerts: [{ id: `alert-${Date.now()}`, name: 'Warning', operator: 'greater_or_equal', threshold: 90, color: '#ef4444', message: 'WARNING' }],
   };
+}
+
+function addWidget() {
+  const widget = createDefaultWidget();
   state.config.widgets.push(widget);
+  markDirty('widget', true);
+  markDirty('dashboard', true);
   selectWidget(widget.id);
 }
 
@@ -224,6 +262,8 @@ function duplicateWidget() {
   copy.y += 24;
   copy.z = state.config.widgets.length + 1;
   state.config.widgets.push(copy);
+  markDirty('widget', true);
+  markDirty('dashboard', true);
   selectWidget(copy.id);
 }
 
@@ -231,12 +271,15 @@ function deleteWidget() {
   if (!state.selectedWidgetId) return;
   state.config.widgets = state.config.widgets.filter((widget) => widget.id !== state.selectedWidgetId);
   state.selectedWidgetId = state.config.widgets[0]?.id ?? null;
+  markDirty('widget', true);
+  markDirty('dashboard', true);
   renderWidgetList();
   renderCanvas();
   populateWidgetForm();
 }
 
 function beginDrag(event, widgetId, resizing) {
+  if (event.target.closest('input, select, button')) return;
   event.preventDefault();
   event.stopPropagation();
   selectWidget(widgetId);
@@ -265,56 +308,79 @@ window.addEventListener('pointermove', (event) => {
     widget.x = Math.max(0, snap(state.dragging.origin.x + dx));
     widget.y = Math.max(0, snap(state.dragging.origin.y + dy));
   }
+  markDirty('widget', true);
+  markDirty('dashboard', true);
   renderCanvas();
   populateWidgetForm();
 });
 
 window.addEventListener('pointerup', () => { state.dragging = null; });
 
-async function saveConfig() {
+async function persistConfig(successMessage = 'Dashboard saved.') {
   const saved = await request('/api/config', { method: 'PUT', body: JSON.stringify(state.config) });
   state.config = saved;
+  markDirty('dashboard', false);
+  markDirty('widget', false);
   renderWidgetList();
   renderCanvas();
+  populateWidgetForm();
+  els.runtimeStatus.textContent = successMessage;
+  return saved;
+}
+
+async function saveConfig() {
+  await persistConfig('Dashboard saved to disk.');
+}
+
+async function saveSelectedWidget() {
+  if (!selectedWidget()) return;
+  await persistConfig(`Saved widget: ${selectedWidget().name}`);
 }
 
 async function refreshRuntime() {
   state.runtime = await request('/api/runtime');
-  els.runtimeStatus.textContent = state.runtime.error ? `${state.runtime.status} · ${state.runtime.error}` : state.runtime.status;
+  if (!state.runtime.error || !String(els.runtimeStatus.textContent).includes('saved')) {
+    els.runtimeStatus.textContent = state.runtime.error ? `${state.runtime.status} · ${state.runtime.error}` : state.runtime.status;
+  }
   renderCanvas();
 }
 
 function wireForm() {
-  els.widgetForm.addEventListener('input', (event) => {
-    const field = event.target;
+  const updateWidgetFromField = (field) => {
     if (!field.name) return;
     const widget = selectedWidget();
     if (!widget) return;
-    let value;
-    if (field.type === 'checkbox') value = field.checked;
-    else if (field.type === 'number') value = field.value === '' ? 0 : Number(field.value);
-    else value = field.value;
+    const currentValue = getPath(widget, field.name);
+    const value = coerceFieldValue(field, currentValue);
     setPath(widget, field.name, value);
+    if (field.name === 'name') widget.display.label ||= value;
+    markDirty('widget', true);
     renderWidgetList();
     renderCanvas();
-  });
+  };
+
+  els.widgetForm.addEventListener('input', (event) => updateWidgetFromField(event.target));
+  els.widgetForm.addEventListener('change', (event) => updateWidgetFromField(event.target));
 
   [
     ['dashboard-title', 'name'],
-    ['dashboard-width', 'width', Number],
-    ['dashboard-height', 'height', Number],
+    ['dashboard-width', 'width', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
+    ['dashboard-height', 'height', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
     ['dashboard-bg', 'backgroundColor'],
     ['dashboard-bg-image', 'backgroundImage'],
-    ['dashboard-grid', 'gridSize', Number],
+    ['dashboard-grid', 'gridSize', (value, current) => Number.isNaN(Number(value)) ? current : Number(value)],
   ].forEach(([id, key, parser]) => {
     document.getElementById(id).addEventListener('input', (event) => {
-      state.config.dashboard[key] = parser ? parser(event.target.value) : event.target.value;
-      renderCanvas();
+      const current = state.config.dashboard[key];
+      state.config.dashboard[key] = parser ? parser(event.target.value, current) : event.target.value;
+      markDirty('dashboard', true);
       updateDashboardControls();
+      renderCanvas();
     });
   });
   els.toggleGrid.addEventListener('change', (event) => {
     state.config.dashboard.showGrid = event.target.checked;
+    markDirty('dashboard', true);
     renderCanvas();
   });
 }
@@ -330,6 +396,36 @@ async function injectFrame() {
   await refreshRuntime();
 }
 
+async function importConfigFromFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  const imported = JSON.parse(text);
+  state.config = await request('/api/config', { method: 'PUT', body: JSON.stringify(imported) });
+  state.selectedWidgetId = state.config.widgets[0]?.id ?? null;
+  markDirty('dashboard', false);
+  markDirty('widget', false);
+  updateDashboardControls();
+  renderWidgetList();
+  renderCanvas();
+  populateWidgetForm();
+  els.runtimeStatus.textContent = `Imported configuration: ${file.name}`;
+  await refreshRuntime();
+}
+
+async function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    await document.documentElement.requestFullscreen();
+    els.fullscreenToggle.textContent = 'Exit fullscreen';
+  } else {
+    await document.exitFullscreen();
+    els.fullscreenToggle.textContent = 'Fullscreen';
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  els.fullscreenToggle.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+});
+
 async function init() {
   state.config = await request('/api/config');
   updateDashboardControls();
@@ -337,16 +433,30 @@ async function init() {
   renderWidgetList();
   renderCanvas();
   wireForm();
+  updateStatusText();
   await refreshRuntime();
   scheduleRefresh();
 }
 
 els.addWidget.addEventListener('click', addWidget);
 els.saveConfig.addEventListener('click', saveConfig);
+els.saveWidget.addEventListener('click', saveSelectedWidget);
+els.importConfigButton.addEventListener('click', () => els.importConfigInput.click());
+els.importConfigInput.addEventListener('change', async (event) => {
+  try {
+    await importConfigFromFile(event.target.files[0]);
+  } catch (error) {
+    console.error(error);
+    els.runtimeStatus.textContent = `Import failed: ${error.message}`;
+  } finally {
+    event.target.value = '';
+  }
+});
 els.duplicateWidget.addEventListener('click', duplicateWidget);
 els.deleteWidget.addEventListener('click', deleteWidget);
 els.injectFrame.addEventListener('click', injectFrame);
 els.refreshRate.addEventListener('change', scheduleRefresh);
+els.fullscreenToggle.addEventListener('click', toggleFullscreen);
 
 init().catch((error) => {
   console.error(error);
